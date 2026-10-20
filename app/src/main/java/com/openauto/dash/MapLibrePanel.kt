@@ -64,6 +64,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -342,6 +343,11 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     val lightMap = DashColors.Light
     // The listener below is registered once; it reads the lock's latest state.
     val movingNow = rememberUpdatedState(moving)
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    // Whether the destination box holds the cursor, so a touch of the map can
+    // put it down again — and only then, so every other touch is left alone.
+    val searchFocused = remember { mutableStateOf(false) }
     MapServers.load(context)
     val servers by MapServers.current.collectAsState()
     val styleUrl = if (lightMap) servers.styleLight else servers.styleDark
@@ -359,6 +365,39 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             InAppNav.guidance.value?.route?.let { navRoute?.show(it) }
             if (!listenersSet) {
                 listenersSet = true
+                // Touching the map puts the keyboard away.
+                //
+                // It has to come from the map's own callbacks. The map is a real
+                // Android View, so a touch that lands on it is dispatched by the
+                // Android view hierarchy and never passes through Compose's
+                // pointer input — no modifier on the AndroidView can see it.
+                // Until this, the keyboard covered the bottom half of the screen,
+                // the Start button with it, and nothing would put it down: the
+                // box kept the cursor, the map swallowed the touch, and these
+                // units' keyboards carry no hide key of their own.
+                //
+                // A tap and a drag are both a dismissal, so both are taken; false
+                // leaves the tap to the map, which has its own use for it.
+                //
+                // Clearing the focus is not enough on its own: with the
+                // destination box the only thing in the panel that can hold
+                // focus, Compose hands it straight back — measured at 30ms —
+                // and the keyboard returns. The focus has to go *somewhere*,
+                // and the map is the right somewhere: it is a real View and
+                // focusable in touch mode, so the driver's touch lands where
+                // they aimed it. The same hand-off at startup stops the box
+                // from grabbing the cursor before anyone has asked to type.
+                fun dismissSearch() {
+                    if (!searchFocused.value) return
+                    keyboard?.hide()
+                    focusManager.clearFocus(force = true)
+                    mapView.requestFocus()
+                }
+                map.addOnMapClickListener { dismissSearch(); false }
+                map.addOnCameraMoveStartedListener { dismissSearch() }
+                // The map takes the focus first, so the keyboard does not open
+                // over the map the moment the dashboard appears.
+                mapView.requestFocus()
                 // A destination is set by a long press, not a tap: a tap while
                 // panning, or a knock on the screen in a bumpy lane, used to
                 // drop the route being followed and start a new one. Never
@@ -407,8 +446,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             // Destination search bar. Searching from the IME key, the search button
             // or a hardware Enter all dismiss the keyboard first so the map is
             // visible while the route loads.
-            val keyboard = LocalSoftwareKeyboardController.current
-            val focusManager = LocalFocusManager.current
             fun submitSearch() {
                 keyboard?.hide()
                 focusManager.clearFocus()
@@ -435,6 +472,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
+                            .onFocusChanged { searchFocused.value = it.isFocused }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyUp &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
