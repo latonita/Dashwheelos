@@ -82,27 +82,26 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.maplibre.android.MapLibre
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.location.LocationComponentActivationOptions
-import org.maplibre.android.location.LocationComponent
-import org.maplibre.android.location.LocationComponentOptions
-import org.maplibre.android.location.OnCameraTrackingChangedListener
-import org.maplibre.android.location.modes.CameraMode
-import org.maplibre.android.location.modes.RenderMode
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapLibreMapOptions
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.FillExtrusionLayer
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.sources.VectorSource
+import com.mapbox.mapboxsdk.Mapbox
+import com.mapbox.mapboxsdk.annotations.MarkerOptions
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
+import com.mapbox.mapboxsdk.geometry.LatLng
+import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions
+import com.mapbox.mapboxsdk.location.LocationComponent
+import com.mapbox.mapboxsdk.location.LocationComponentOptions
+import com.mapbox.mapboxsdk.location.OnCameraTrackingChangedListener
+import com.mapbox.mapboxsdk.location.modes.CameraMode
+import com.mapbox.mapboxsdk.location.modes.RenderMode
+import com.mapbox.mapboxsdk.maps.MapboxMap
+import com.mapbox.mapboxsdk.maps.MapboxMapOptions
+import com.mapbox.mapboxsdk.maps.MapView
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.style.expressions.Expression
+import com.mapbox.mapboxsdk.style.layers.FillExtrusionLayer
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.sources.VectorSource
 import org.maplibre.geojson.Point
-import org.maplibre.navigation.android.navigation.ui.v5.route.NavigationMapRoute
 import org.maplibre.navigation.core.models.DirectionsResponse
 import org.maplibre.navigation.core.models.DirectionsRoute
 import org.maplibre.navigation.core.models.RouteOptions
@@ -155,12 +154,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     }
 
     val mapView = remember {
-        MapLibre.getInstance(context)
-        val options = MapLibreMapOptions.createFromAttributes(context, null).textureMode(true)
+        Mapbox.getInstance(context)
+        val options = MapboxMapOptions.createFromAttributes(context, null).textureMode(true)
         MapView(context, options).also { if (wallpaper) it.setMaximumFps(WALLPAPER_FPS) }
     }
 
-    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapRef by remember { mutableStateOf<MapboxMap?>(null) }
     // On a page the pagers keep composed beside the one on screen nobody sees
     // the map, yet a camera following the car redrew it every frame: it runs
     // at [HIDDEN_FPS] there, and back at its own pace (uncapped, or the
@@ -172,7 +171,9 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         if (pageActive) mapRef?.triggerRepaint()
     }
 
-    var navRoute by remember { mutableStateOf<NavigationMapRoute?>(null) }
+    var navRoute by remember { mutableStateOf<RouteLine?>(null) }
+    // Map listeners are set once; the route line is rebuilt per style (below).
+    var listenersSet by remember { mutableStateOf(false) }
     var route by remember { mutableStateOf<DirectionsRoute?>(null) }
     var destination by remember { mutableStateOf<Point?>(null) }
     // What the destination is called: the address typed, a saved place's name; null for a spot picked on the map.
@@ -184,7 +185,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
 
     fun clearRoute() {
         route = null; destination = null; destinationName = null; info = null; error = null
-        navRoute?.removeRoute()
+        navRoute?.clear()
         mapRef?.markers?.forEach { mapRef?.removeMarker(it) }
     }
 
@@ -214,7 +215,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                 val first = resp.routes.firstOrNull()
                 if (first == null) { error = context.getString(R.string.info_map_no_route); return@onSuccess }
                 route = first
-                navRoute?.addRoutes(resp.routes)
+                navRoute?.showAll(resp.routes)
                 info = formatEta(context, first.distance, first.duration)
                 map.animateCamera(
                     CameraUpdateFactory.newLatLngZoom(LatLng(dest.latitude(), dest.longitude()), 13.0)
@@ -348,8 +349,16 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
             add3dBuildings(style, lightMap)
-            if (navRoute == null) {
-                navRoute = NavigationMapRoute(mapView, map)
+            // The route's source and layers belong to the style, and switching
+            // between the day and night styles builds a new one — so the line
+            // has to be made again each time or it disappears with the old
+            // style, in silence, leaving a guided route with nothing drawn.
+            navRoute = RouteLine(style)
+            // Redrawn too: the new line starts empty, and the route being
+            // followed is not interrupted by the driver changing the map's look.
+            InAppNav.guidance.value?.route?.let { navRoute?.show(it) }
+            if (!listenersSet) {
+                listenersSet = true
                 // A destination is set by a long press, not a tap: a tap while
                 // panning, or a knock on the screen in a bumpy lane, used to
                 // drop the route being followed and start a new one. Never
@@ -375,18 +384,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(navRoute, guidedRoute) {
         val line = navRoute ?: return@LaunchedEffect
         if (guidedRoute != null) {
-            line.addRoute(guidedRoute)
+            line.show(guidedRoute)
             wasGuiding = true
         } else if (wasGuiding) {
             wasGuiding = false
             clearRoute()
         }
-    }
-    DisposableEffect(navRoute, navigation) {
-        val line = navRoute
-        val nav = navigation
-        if (line != null && nav != null) runCatching { line.addProgressChangeListener(nav) }
-        onDispose { if (line != null && nav != null) runCatching { line.removeProgressChangeListener(nav) } }
     }
 
     // Location puck: enabled once the style is up, and again if the permission
@@ -566,7 +569,7 @@ private fun GuidancePanel(guidance: InAppNav.Guidance, modifier: Modifier = Modi
 
 @SuppressLint("MissingPermission")
 private fun enableLocation(
-    map: MapLibreMap,
+    map: MapboxMap,
     style: Style,
     context: Context,
     scope: kotlinx.coroutines.CoroutineScope,
@@ -592,7 +595,7 @@ private fun enableLocation(
             // to; route previews and search hits don't change it.
             var byGesture = false
             map.addOnCameraMoveStartedListener { reason ->
-                byGesture = reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE
+                byGesture = reason == MapboxMap.OnCameraMoveStartedListener.REASON_API_GESTURE
             }
             map.addOnCameraIdleListener {
                 if (byGesture) userZooms[map] = map.cameraPosition.zoom
@@ -643,7 +646,7 @@ private fun enableLocation(
 private const val TRACKING_RESUME_MS = 10_000L
 
 /** Zoom last set by a pinch on each map; tracking resumes at it instead of the default. */
-private val userZooms = java.util.WeakHashMap<MapLibreMap, Double>()
+private val userZooms = java.util.WeakHashMap<MapboxMap, Double>()
 
 /** Follow position and heading with the driving-nav zoom and pitch, keeping tracking on. */
 private fun followVehicle(lc: LocationComponent, wallpaper: MapView? = null, zoom: Double? = null) {

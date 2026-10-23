@@ -12,6 +12,18 @@
 -keep class org.maplibre.** { *; }
 -dontwarn org.maplibre.**
 
+# The map SDK is the 10.x line (OpenGL ES 2.0 — see app/build.gradle.kts), and
+# that line still carries the pre-rename package. Its JNI bridge looks classes,
+# fields and methods up by name from C++, so R8 renaming any of them breaks the
+# map with a crash that points into native code and names nothing.
+-keep class com.mapbox.** { *; }
+
+# The navigation UI module is built against the map SDK's 11.x names, which are
+# absent here. Nothing that refers to them is used — the route line is drawn by
+# RouteLine.kt and only ManeuverView is taken from that module, which touches no
+# map class — but R8 still sees the references while walking the module.
+-dontwarn com.mapbox.**
+
 # Keep the app's own JSON-facing enums by name: tile kinds and theme modes are
 # persisted with Enum.name / valueOf, which R8 would otherwise rename.
 -keepclassmembers enum com.openauto.dash.** { *; }
