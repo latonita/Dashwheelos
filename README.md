@@ -2,6 +2,18 @@
 
 # Dashwheel
 
+> **This is a fork.** Dashwheel is the work of [deviloufr-ai](https://github.com/deviloufr-ai), and all credit for it goes to them: the original project lives at **[deviloufr-ai/Dashwheel](https://github.com/deviloufr-ai/Dashwheel)**, and that is where releases, the wiki and support are.
+>
+> **Why the fork:** Dashwheel is a great launcher, and it deserves to run on older head units too. The original needs Android 9 and a GPU with OpenGL ES 3.0. This fork brings it to **Android 8.1 (API 27) units whose GPU only does OpenGL ES 2.0**: in my case an **XYAuto unit on the MediaTek AC8227L** chipset (Mali-450).
+>
+> What the fork changes, each as its own branch off the original:
+> - `feature/api27`: runs on Android 8.1 (minSdk 27, with pre-Android 9 paths for the few calls that need them)
+> - `feature/tls13`: TLS 1.3 through Conscrypt, so routing works below Android 10
+> - `feature/gles2`: the map on MapLibre 10.3.7, the last release that draws with OpenGL ES 2.0
+> - `feature/bar-space-stretch`: Space and Stretch in the bottom bar (also offered upstream)
+>
+> `radio` is the branch that brings them together for my own unit. The rest of this README is the original's.
+
 **The free, open-source car launcher for Android head units (QF, FYT, Microntek and more).** Map, music and live car data on one calm screen: up to seven dashboards you arrange yourself, 55+ widgets, whole-design skins, an AI mechanic that explains warning lights, and your phone's calls and messages on the big screen. No ads, no trial, no account.
 
 ![Dashwheel: map, speed, weather and music on one screen](docs/screenshots/01_hero.jpg)
