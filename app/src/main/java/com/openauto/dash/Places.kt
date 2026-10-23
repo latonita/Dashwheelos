@@ -342,9 +342,7 @@ internal object NavHandoff {
         val at = status.windowBounds?.takeIf { status.docked } ?: return false
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(app).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val options = ActivityOptions.makeBasic().setLaunchBounds(Rect(at.left, at.top, at.right, at.bottom))
-        runCatching {
-            ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(options, WINDOWING_MODE_FREEFORM)
-        }
+        LaunchModeCompat.apply(options, WINDOWING_MODE_FREEFORM)
         if (runCatching { context.startActivity(intent, options.toBundle()) }.isFailure) return false
         windowScope.launch { backInWindow(context.applicationContext, app, at) }
         return true

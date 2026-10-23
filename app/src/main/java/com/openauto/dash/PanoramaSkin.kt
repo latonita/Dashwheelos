@@ -141,7 +141,7 @@ internal val panoRim: Color get() = if (DashColors.Light) Color(0x2E28466E) else
 
 /** The DIN-like face: Roboto Condensed at the weights Android ships it in (one family per weight, since a wrapped typeface keeps one). */
 private fun condensed(weight: Int): FontFamily =
-    FontFamily(Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), weight, false))
+    FontFamily(robotoWeight(weight, condensed = true))
 
 // Lazy: made on first use, never while the palettes above load (the JVM tests have no typefaces).
 private val DinLight by lazy { condensed(300) }
