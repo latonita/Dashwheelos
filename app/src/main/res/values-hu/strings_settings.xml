@@ -162,7 +162,7 @@
     <string name="settings_backup_confirm">Visszaállítás</string>
     <string name="settings_resume_music">Zene folytatása induláskor</string>
     <string name="settings_resume_music_detail">Az alkalmazás, amely kikapcsoláskor szólt, újra lejátszik. Hagyja kikapcsolva, ha a fejegység már megteszi.</string>
-    <string name="bar_items_title">Alsó sáv</string>
+    <string name="bar_items_title">Sáv</string>
     <string name="bar_items_custom">A sáv tartalmának kiválasztása</string>
     <string name="bar_items_theme">Ki: a sáv, ahogy a téma rajzolja</string>
     <string name="bar_items_skin">A kijelzések csak a normál sávval látszanak, skinnel nem.</string>

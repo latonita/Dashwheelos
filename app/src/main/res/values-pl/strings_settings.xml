@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Przywróć</string>
     <string name="settings_resume_music">Wznów muzykę przy starcie</string>
     <string name="settings_resume_music_detail">Aplikacja grająca przy wyłączeniu zagra znowu. Zostaw wyłączone, jeśli radio robi to samo.</string>
-    <string name="bar_items_title">Dolny pasek</string>
+    <string name="bar_items_title">Pasek</string>
     <string name="bar_items_custom">Wybierz, co pokazuje pasek</string>
     <string name="bar_items_theme">Wyłączone: pasek motywu</string>
     <string name="bar_items_skin">Wskaźniki pojawiają się tylko na standardowym pasku, nie w skinach.</string>

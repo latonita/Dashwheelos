@@ -163,13 +163,19 @@
     <string name="dash_effects_none_hint">Schede opache, cifre essenziali, niente bagliore: si legge in pieno sole</string>
     <string name="dash_effects_reduced_hint">Aloni attenuati, vetro mantenuto</string>
     <string name="dash_effects_full_hint">Ogni tema con tutti i suoi aloni e il vetro</string>
-    <string name="dash_bar_title">Barra inferiore</string>
+    <string name="dash_bar_title">Barra</string>
     <string name="dash_bar_auto_hide">Nascondi la barra automaticamente</string>
     <string name="dash_bar_auto_hide_detail">Si ritira quando non serve, per lasciare più spazio ai cruscotti</string>
     <string name="dash_bar_hide_after">Nascondi dopo %1$d s</string>
     <string name="dash_bar_hide_now">Nascondi subito</string>
     <string name="dash_bar_swipe_up_detail">Quando è nascosta, scorri verso l\'alto dal bordo inferiore per farla ricomparire</string>
     <string name="dash_bar_swipe_up_hint">Scorri in su per la barra</string>
+    <string name="dash_bar_swipe_down_detail">Quando è nascosta, scorri verso il basso dal bordo superiore per farla ricomparire</string>
+    <string name="dash_bar_swipe_down_hint">Scorri in giù per la barra</string>
+    <string name="dash_bar_position">Posizione</string>
+    <string name="dash_bar_position_bottom">In basso</string>
+    <string name="dash_bar_position_top">In alto</string>
+    <string name="dash_bar_position_skin">Solo l\'aspetto standard può mettere la barra in alto; uno skin tiene la propria barra in basso.</string>
     <string name="dash_bar_show">Mostra la barra</string>
 
     <!-- In movimento: le modifiche attendono che l'auto sia ferma -->

@@ -1306,13 +1306,16 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
         }
     )
 
-    // The bar lives at the bottom: the OS status bar owns the top edge on
-    // this head unit whenever a floating window is on screen, and it used to
-    // cover the launcher bar there. A horizontal swipe across the bar (or
+    // The bar lives at the bottom unless the driver put it on top (BarPosition.kt):
+    // the OS status bar owns the top edge on this head unit whenever a floating
+    // window is on screen, and it used to cover the launcher bar there. On top
+    // it stands under that bar, where the dashboard's own padding (barOverlapPx)
+    // already starts. A horizontal swipe across the bar (or
     // the page dots) changes page, for when a docked window covers the pages.
     // A parked window's cover sits in the bottom-right corner; the bar stops
     // short of it so its ⋮ button stays reachable.
     val coverShowing by ParkedCover.showing.collectAsState()
+    val barPosition = rememberBarPosition()
     val launcherBar: @Composable (@Composable () -> Unit) -> Unit = { bar ->
         Column(
             modifier = Modifier
@@ -1426,6 +1429,37 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
     if (tabsShown && underApp != null) {
         CanvasAppBackdrop(underApp, railOnRight, Modifier.fillMaxSize())
     } else if (canvas) CanvasBackdrop(Modifier.fillMaxSize())
+    // One bar at a time: while arranging, the edit bar stands where the
+    // launcher bar does (a swipe along it still turns the page), and
+    // Done brings the launcher bar back. At the edge the driver chose
+    // (BarPosition.kt): before the pages for the top, after them for the bottom.
+    val barSlot: @Composable () -> Unit = {
+        if (arranging) {
+            val pageTiles = pages.getOrNull(currentPage).orEmpty()
+            launcherBar {
+                EditBar(
+                    page = currentPage,
+                    canUndo = history.isNotEmpty(),
+                    // The page's text size: what its tiles share, or what most of them have.
+                    pageZoom = pageTiles.filter { it.canZoom() }.map { it.zoom }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: 1f,
+                    onAdd = { onAdd(currentPage) },
+                    onUndo = { undo() },
+                    onReset = { removeChoice = currentPage },
+                    onTemplates = { showTemplates = true },
+                    // Not the floating windows: a size of their own would move them inside their tiles.
+                    onPageZoom = { zoom -> mutatePage(currentPage) { list -> list.map { if (it.canZoom()) it.withZoom(zoom) else it } } },
+                    onDashboard = { barTabs.indexOfFirst { it.page == currentPage }.takeIf { it >= 0 }?.let { dashSheet = it } },
+                    // A cross: the overview adds and removes them; over an app, the rail's sheet.
+                    onNewDashboard = if (tabsShown && barModel.canAddDashboard) ({ dashSheet = -1 }) else null,
+                    onDashboards = if (!tabsShown) ({ DashboardsOverviewHost.open = true }) else null,
+                    onShare = { shareOpen = true },
+                    onDone = { editing = false }
+                )
+            }
+        } else if (!barAutoHide && !railOn) {
+            launcherBar { TopBar(settingsModel) }
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1436,14 +1470,15 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
             }
             .padding(top = with(density) { barOverlapPx.toDp() })
     ) {
+        if (barPosition == BarPosition.TOP) barSlot()
 
         Box(
             modifier = Modifier
                 .weight(1f)
                 // With auto-hide the bar floats over the pages; once it has gone,
-                // a swipe up from their bottom edge brings it back.
-                .then(if (barAutoHide && !railOn) Modifier.swipeUpRevealsBar(barState, barRevealTap) else Modifier)
-                // Docked app windows must stay inside this area (above the bar,
+                // a swipe from their edge on its side brings it back.
+                .then(if (barAutoHide && !railOn) Modifier.swipeRevealsBar(barState, barPosition, barRevealTap) else Modifier)
+                // Docked app windows must stay inside this area (clear of the bar,
                 // unless it floats over the pages and they step aside for it).
                 .tourTarget(TourTarget.PAGES)
                 .onGloballyPositioned { coords ->
@@ -1697,7 +1732,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 6.dp)
                 )
             }
-            if (barAutoHide && !arranging && !railOn) BarHandle(barState, Modifier.align(Alignment.BottomCenter))
+            if (barAutoHide && !arranging && !railOn) BarHandle(barState, barPosition, Modifier.align(if (barPosition == BarPosition.TOP) Alignment.TopCenter else Alignment.BottomCenter))
 
             // The tapped tile's panel, over the side of the pages that leaves
             // the tile in sight (TileOptions.kt).
@@ -1910,41 +1945,21 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
             }
         }
 
-        // One bar at a time: while arranging, the edit bar stands where the
-        // launcher bar does (a swipe along it still turns the page), and
-        // Done brings the launcher bar back.
-        if (arranging) {
-            val pageTiles = pages.getOrNull(currentPage).orEmpty()
-            launcherBar {
-                EditBar(
-                    page = currentPage,
-                    canUndo = history.isNotEmpty(),
-                    // The page's text size: what its tiles share, or what most of them have.
-                    pageZoom = pageTiles.filter { it.canZoom() }.map { it.zoom }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: 1f,
-                    onAdd = { onAdd(currentPage) },
-                    onUndo = { undo() },
-                    onReset = { removeChoice = currentPage },
-                    onTemplates = { showTemplates = true },
-                    // Not the floating windows: a size of their own would move them inside their tiles.
-                    onPageZoom = { zoom -> mutatePage(currentPage) { list -> list.map { if (it.canZoom()) it.withZoom(zoom) else it } } },
-                    onDashboard = { barTabs.indexOfFirst { it.page == currentPage }.takeIf { it >= 0 }?.let { dashSheet = it } },
-                    // A cross: the overview adds and removes them; over an app, the rail's sheet.
-                    onNewDashboard = if (tabsShown && barModel.canAddDashboard) ({ dashSheet = -1 }) else null,
-                    onDashboards = if (!tabsShown) ({ DashboardsOverviewHost.open = true }) else null,
-                    onShare = { shareOpen = true },
-                    onDone = { editing = false }
-                )
-            }
-        } else if (!barAutoHide && !railOn) {
-            launcherBar { TopBar(settingsModel) }
-        }
+        if (barPosition == BarPosition.BOTTOM) barSlot()
     }
     // Auto-hide (Settings › Display): the bar floats over the pages, which keep
     // the whole height, so showing or hiding it never resizes the dashboard.
     if (barAutoHide && !arranging && !railOn) {
-        Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+        val onTop = barPosition == BarPosition.TOP
+        Column(
+            modifier = Modifier
+                .align(if (onTop) Alignment.TopCenter else Alignment.BottomCenter)
+                .fillMaxWidth()
+                // Under the unit's status bar, as the dashboard's own padding is.
+                .then(if (onTop) Modifier.padding(top = with(density) { barOverlapPx.toDp() }) else Modifier)
+        ) {
             launcherBar {
-                AutoHidingBar(state = barState, hideSeconds = barHideSeconds) {
+                AutoHidingBar(state = barState, hideSeconds = barHideSeconds, position = barPosition) {
                     TopBar(settingsModel)
                 }
             }

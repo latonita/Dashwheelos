@@ -162,7 +162,7 @@
     <string name="settings_backup_confirm">Восстановить</string>
     <string name="settings_resume_music">Продолжать музыку при запуске</string>
     <string name="settings_resume_music_detail">Приложение, игравшее при выключении, снова начнёт играть. Не включайте, если магнитола делает это сама.</string>
-    <string name="bar_items_title">Нижняя панель</string>
+    <string name="bar_items_title">Панель</string>
     <string name="bar_items_custom">Выбрать, что показывать</string>
     <string name="bar_items_theme">Выкл.: панель как в теме</string>
     <string name="bar_items_skin">Показатели видны только со стандартной панелью, не со скином.</string>

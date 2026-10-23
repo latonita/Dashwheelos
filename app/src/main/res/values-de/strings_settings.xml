@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Wiederherstellen</string>
     <string name="settings_resume_music">Musik beim Start fortsetzen</string>
     <string name="settings_resume_music_detail">Die App, die beim Ausschalten lief, spielt weiter. Aus lassen, wenn das Gerät es schon tut.</string>
-    <string name="bar_items_title">Untere Leiste</string>
+    <string name="bar_items_title">Leiste</string>
     <string name="bar_items_custom">Wählen, was die Leiste zeigt</string>
     <string name="bar_items_theme">Aus: die Leiste des Designs</string>
     <string name="bar_items_skin">Die Anzeigen erscheinen nur mit der Standardleiste, nicht mit einem Skin.</string>

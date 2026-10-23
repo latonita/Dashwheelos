@@ -506,7 +506,7 @@ private fun Caption(text: String, modifier: Modifier = Modifier, color: Color = 
 }
 
 /**
- * Settings, Display, under the one "Bottom bar" heading (with its auto-hide,
+ * Settings, Display, under the one "Bar" heading (with its auto-hide,
  * ThemePane.kt): the bar's readouts. Off: the theme's own bar. On: a list
  * of every readout, ticked or not, moved up and down into order. A skin draws
  * its own bar and shows none of them: under one the switch is greyed out and

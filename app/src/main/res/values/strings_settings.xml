@@ -163,7 +163,7 @@
     <string name="settings_backup_confirm">Restore</string>
     <string name="settings_resume_music">Resume music at start</string>
     <string name="settings_resume_music_detail">The app that was playing when you switched off plays again. Leave off if the unit already does it.</string>
-    <string name="bar_items_title">Bottom bar</string>
+    <string name="bar_items_title">Bar</string>
     <string name="bar_items_custom">Choose what the bar shows</string>
     <string name="bar_items_theme">Off: the bar as the theme draws it</string>
     <string name="bar_items_skin">Readouts show with the standard bar only, not with a skin.</string>
