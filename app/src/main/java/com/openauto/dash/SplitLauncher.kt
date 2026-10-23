@@ -178,11 +178,9 @@ object SplitLauncher {
         val bounds = launchBounds ?: Rect(m.widthPixels / 2, 0, m.widthPixels, m.heightPixels)
 
         val options = ActivityOptions.makeBasic()
-        runCatching {
-            ActivityOptions::class.java
-                .getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
-                .invoke(options, WINDOWING_MODE_FREEFORM)
-        }.onFailure { Log.d(TAG, "setLaunchWindowingMode unavailable", it) }
+        if (!LaunchModeCompat.apply(options, WINDOWING_MODE_FREEFORM)) {
+            Log.d(TAG, "no freeform launch mode on this Android")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching { options.setLaunchBounds(bounds) }
         }

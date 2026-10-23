@@ -31,7 +31,7 @@ android {
 
     defaultConfig {
         applicationId = "com.openauto.dash"
-        minSdk = 28
+        minSdk = 27
         targetSdk = 36
         // Version is driven by CI (the Actions run number) so each build is
         // newer than the last; defaults keep local builds working.
