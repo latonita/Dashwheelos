@@ -2,6 +2,7 @@ package com.openauto.dash
 
 import android.content.Context
 import android.location.LocationManager
+import android.os.Build
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.SystemClock
@@ -142,7 +143,12 @@ object WazeWake {
     /** Location on and an internet link Android checked: what Waze lacked when it woke first. */
     private fun ready(context: Context): Boolean {
         val location = runCatching {
-            (context.getSystemService(Context.LOCATION_SERVICE) as LocationManager).isLocationEnabled
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            // isLocationEnabled is API 28; the older units answer the same question
+            // through the provider, which has been there since the beginning.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) lm.isLocationEnabled
+            else lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         }.getOrDefault(true)
         val online = runCatching {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

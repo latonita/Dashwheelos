@@ -169,7 +169,7 @@ internal val KineticLayout = SkinLayout(
 internal enum class KnFace { HERO, COND, COND_MEDIUM, COND_BOLD, WIDE_LIGHT, OUTLINE }
 
 private fun knCondensed(weight: Int): FontFamily =
-    FontFamily(Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), weight, false))
+    FontFamily(robotoWeight(weight, condensed = true))
 
 // Lazy: made on first use, never while the palettes above load (the JVM tests have no typefaces).
 private val KnCond by lazy { knCondensed(400) }

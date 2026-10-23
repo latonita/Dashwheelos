@@ -150,7 +150,7 @@ internal val wsRim: Color get() = if (DashColors.Light) Color(0x3D0A3C5C) else C
 
 /** The DIN-like condensed face (Barlow Condensed in the mockup): Roboto Condensed at the weights Android ships. */
 private fun condensed(weight: Int): FontFamily =
-    FontFamily(Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), weight, false))
+    FontFamily(robotoWeight(weight, condensed = true))
 
 // Lazy: made on first use, never while the palettes above load (the JVM tests have no typefaces).
 private val WsRegular by lazy { condensed(400) }

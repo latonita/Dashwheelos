@@ -1415,7 +1415,7 @@ internal object EmbeddedApp {
             if (_status.value != Status.SHOWN) return false
             intent.setPackage(packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             val options = ActivityOptions.makeBasic().setLaunchDisplayId(vd.displayId)
-            runCatching { HiddenApi.invoke(ActivityOptions::class.java, options, "setLaunchWindowingMode", WINDOWING_MODE_FULLSCREEN) }
+            LaunchModeCompat.apply(options, WINDOWING_MODE_FULLSCREEN)
             openedAt = SystemClock.elapsedRealtime()
             val ok = runCatching { context.startActivity(intent, options.toBundle()) }
                 .onFailure { Log.w(TAG, "$packageName refused the intent on display ${vd.displayId}", it) }
@@ -1434,7 +1434,7 @@ internal object EmbeddedApp {
             val vd = display ?: return false
             if (_status.value != Status.SHOWN) return false
             val options = ActivityOptions.makeBasic().setLaunchDisplayId(vd.displayId)
-            runCatching { HiddenApi.invoke(ActivityOptions::class.java, options, "setLaunchWindowingMode", WINDOWING_MODE_FULLSCREEN) }
+            LaunchModeCompat.apply(options, WINDOWING_MODE_FULLSCREEN)
             // Android 14 and later start another app's screen for us only when asked to.
             @Suppress("DEPRECATION")
             if (Build.VERSION.SDK_INT >= 34) options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
@@ -1859,8 +1859,9 @@ internal object EmbeddedApp {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             val options = ActivityOptions.makeBasic().setLaunchDisplayId(vd.displayId)
             // Full size on the tile's display, not the floating window it may have had before.
-            runCatching { HiddenApi.invoke(ActivityOptions::class.java, options, "setLaunchWindowingMode", WINDOWING_MODE_FULLSCREEN) }
-                .onFailure { Log.w(TAG, "no windowing mode for $packageName", it) }
+            if (!LaunchModeCompat.apply(options, WINDOWING_MODE_FULLSCREEN)) {
+                Log.w(TAG, "no windowing mode for $packageName")
+            }
             _status.value = runCatching { context.startActivity(intent, options.toBundle()) }
                 .onFailure { Log.w(TAG, "$packageName refused on display ${vd.displayId}", it) }
                 .fold({ Status.SHOWN }, { Status.BLOCKED })
