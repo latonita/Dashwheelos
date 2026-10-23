@@ -258,8 +258,8 @@ internal fun BarReadouts(items: List<BarItem>, m: TopBarModel, modifier: Modifie
     }
 }
 
-/** A fixed [BarItem.SPACE]: about an icon's width. */
-private val SPACE_WIDTH = 24.dp
+/** A fixed [BarItem.SPACE]: about an icon's width, on the app's spacing scale. */
+private val SPACE_WIDTH = DashSpace.Xl
 private const val STRETCH_ID = "bar_stretch"
 
 /**
