@@ -182,6 +182,8 @@
     <string name="bar_item_phone">Телефон</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Снаружи</string>
+    <string name="bar_item_space">Отступ</string>
+    <string name="bar_item_stretch">Растянуть</string>
     <string name="bar_look_labels">Подписи</string>
     <string name="bar_look_labels_hint">Подпись под каждым показателем.</string>
     <string name="bar_look_compact">Компактно</string>
