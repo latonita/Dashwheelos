@@ -1,5 +1,8 @@
 package com.openauto.dash
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
@@ -31,7 +34,7 @@ import org.maplibre.navigation.core.models.DirectionsRoute
  * own position is on the map anyway, as the puck, so nothing is lost but the
  * shading.
  */
-internal class RouteLine(private val style: Style) {
+internal class RouteLine(private val style: Style, accent: Color) {
 
     private val source = GeoJsonSource(SOURCE)
 
@@ -43,13 +46,13 @@ internal class RouteLine(private val style: Style) {
             // which is the right answer for a style that has nothing to cover.
             val firstSymbol = style.layers.firstOrNull { it is com.mapbox.mapboxsdk.style.layers.SymbolLayer }?.id
             val casing = LineLayer(CASING, SOURCE).withProperties(
-                PropertyFactory.lineColor(CASING_COLOR),
+                PropertyFactory.lineColor(casingColor(accent)),
                 PropertyFactory.lineWidth(CASING_WIDTH),
                 PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                 PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
             )
             val line = LineLayer(LAYER, SOURCE).withProperties(
-                PropertyFactory.lineColor(LINE_COLOR),
+                PropertyFactory.lineColor(lineColor(accent)),
                 PropertyFactory.lineWidth(LINE_WIDTH),
                 PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                 PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
@@ -81,6 +84,14 @@ internal class RouteLine(private val style: Style) {
         routes.firstOrNull()?.let(::show) ?: clear()
     }
 
+    /** Recolour both layers for a new [accent] (the look changed); a no-op once the style is gone. */
+    fun tint(accent: Color) {
+        runCatching {
+            style.getLayer(CASING)?.setProperties(PropertyFactory.lineColor(casingColor(accent)))
+            style.getLayer(LAYER)?.setProperties(PropertyFactory.lineColor(lineColor(accent)))
+        }
+    }
+
     /** Take the route off the map, leaving the layers in place for the next one. */
     fun clear() {
         runCatching { source.setGeoJson(FeatureCollectionEmpty) }
@@ -91,9 +102,13 @@ internal class RouteLine(private val style: Style) {
         const val LAYER = "dash-route"
         const val CASING = "dash-route-casing"
 
-        /** The blue a driver reads as "your route", and a darker edge to lift it off the map. */
-        const val LINE_COLOR = 0xFF1A73E8.toInt()
-        const val CASING_COLOR = 0xFF0B4FA8.toInt()
+        /**
+         * The dashboard's accent is "your route", with a much darker edge of the
+         * same hue to lift it off the map: the accent is bright on the night map
+         * and deep on the day one, and the dark edge separates it from both.
+         */
+        fun lineColor(accent: Color): Int = accent.copy(alpha = 1f).toArgb()
+        fun casingColor(accent: Color): Int = lerp(accent.copy(alpha = 1f), Color.Black, 0.55f).toArgb()
         const val LINE_WIDTH = 6f
         const val CASING_WIDTH = 10f
 
