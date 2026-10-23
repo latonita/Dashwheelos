@@ -88,6 +88,8 @@ object UnitDetector {
 
     private val TS_BUILD = Regex("^TS\\d+\\.")
     private val SUN = Regex("^sun(8i|50i|\\d)", RegexOption.IGNORE_CASE)
+    /** The MediaTek automotive SoCs XYAuto builds on, as the ROMs spell them. */
+    private val AC822X = setOf("ac8227l", "ac8227", "ac8257")
 
     /** The families in the order ties are broken, each with its rules. */
     private val RULES: List<Pair<UnitFamily, List<Rule>>> = listOf(
@@ -132,6 +134,19 @@ object UnitDetector {
             Rule("build", "model", strong = false) { p -> p.model.takeIf { it.equals("ums512_1h10_Natv", true) } },
             Rule("build", "display", strong = false) { p -> p.display.takeIf { TS_BUILD.containsMatchIn(it) } },
             pkg("com.zjinnova.zlink", strong = false)
+        ),
+        // Before Reglink: both families live on the same MediaTek boards, and on a
+        // board-only tie the AC8227L belongs to XYAuto, whose own list names it.
+        UnitFamily.XYAUTO to listOf(
+            pkg("com.kyhero.car.myhost", strong = true),
+            pkg("com.kyhero.car.myplugin.canbus", strong = true),
+            propIn("ro.board.platform", AC822X, strong = false),
+            propIn("ro.hardware", AC822X, strong = false),
+            // The launcher is AOSP's own package name, present on countless unrelated
+            // units: it counts only together with the board underneath it.
+            Rule("pkg", "com.android.launcher+board", strong = false) { p ->
+                if (p.hasPackage("com.android.launcher") && AC822X.any { it.equals(p.prop("ro.board.platform"), true) }) "present" else null
+            }
         ),
         UnitFamily.REGLINK to listOf(
             pkg("com.reglink.services", strong = true),

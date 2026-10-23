@@ -12,6 +12,7 @@ import com.openauto.dash.unit.mtc.MtcAdapter
 import com.openauto.dash.vehicle.K
 import com.openauto.dash.vehicle.Key
 import com.openauto.dash.vehicle.Vehicle
+import com.openauto.dash.unit.xyauto.XyautoAdapter
 import com.openauto.unitproto.Detection
 import com.openauto.unitproto.UnitDetector
 import com.openauto.unitproto.UnitFamily
@@ -115,6 +116,7 @@ object UnitPlatform {
             UnitFamily.QF -> QfAdapter(app)
             UnitFamily.FYT -> FytAdapter(app)
             UnitFamily.MTC -> MtcAdapter(app)
+            UnitFamily.XYAUTO -> XyautoAdapter(app)
             // Topway, Reglink, Allwinner, NWD and the unrecognised: plain Android plus their few hooks.
             else -> PlainAdapters.forFamily(app, family)
         }

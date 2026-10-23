@@ -125,6 +125,10 @@
         <package android:name="com.reglink.services" />
         <package android:name="com.reglink.launcher4" />
         <package android:name="com.baony.avm360" />
+        <!-- The XYAuto ("9320") units' CAN stack: its host app and the per-brand decoder
+             plugin, which together publish the car's data as plain broadcasts. -->
+        <package android:name="com.kyhero.car.myhost" />
+        <package android:name="com.kyhero.car.myplugin.canbus" />
         <!-- Deep OBD, which can report the car's readings in place of an adapter (DeepObdSource). -->
         <package android:name="de.holeschak.bmw_deep_obd" />
         <intent>
