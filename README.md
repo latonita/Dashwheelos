@@ -4,7 +4,9 @@
 
 > **This is a fork.** Dashwheel is the work of [deviloufr-ai](https://github.com/deviloufr-ai), and all credit for it goes to them: the original project lives at **[deviloufr-ai/Dashwheel](https://github.com/deviloufr-ai/Dashwheel)**, and that is where releases, the wiki and support are.
 >
-> **Why the fork:** Dashwheel is a great launcher, and it deserves to run on older head units too. The original needs Android 9 and a GPU with OpenGL ES 3.0. This fork brings it to **Android 8.1 (API 27) units whose GPU only does OpenGL ES 2.0**: in my case an **XYAuto unit on the MediaTek AC8227L** chipset (Mali-450).
+> **Why the fork:** Dashwheel is a great launcher, and it deserves to run on older head units too. The original needs Android 9 and a GPU with OpenGL ES 3.0. This fork brings it to **Android 8.1 (API 27) units whose GPU only does OpenGL ES 2.0**.
+>
+> My own unit is from **XYAuto**, built on the **ZhangXun / Hechuang B9320B** motherboard layout: this exact PCB is the **B9320BH V0.1/C 64G**, paired with the **AutoChips AC8238PTVA** SoC (Mali-450 GPU). The build isn't tied to it, though: it should work on many other Android 8.1 units, the AC8227L ones included.
 >
 > What the fork changes, each as its own branch off the original:
 > - `feature/api27`: runs on Android 8.1 (minSdk 27, with pre-Android 9 paths for the few calls that need them)
