@@ -59,6 +59,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.collectAsState
@@ -204,14 +205,15 @@ internal fun EffectsSetting(theme: ThemeState) {
 }
 
 /**
- * The bottom bar: always there, or hiding itself once unused for the chosen
- * 0 to 20 seconds and coming back with a swipe up (BarAutoHide.kt).
+ * The bar's heading and its hiding: always there, or hiding itself once unused
+ * for the chosen 0 to 20 seconds and coming back with a swipe from its edge
+ * (BarAutoHide.kt).
  */
 @Composable
 internal fun BarAutoHideSetting(theme: ThemeState) {
     SettingsSection(stringResource(R.string.dash_bar_title))
     SettingsToggle(
-        icon = Icons.Filled.VerticalAlignBottom,
+        icon = if (rememberBarPosition() == BarPosition.TOP) Icons.Filled.VerticalAlignTop else Icons.Filled.VerticalAlignBottom,
         title = stringResource(R.string.dash_bar_auto_hide),
         detail = stringResource(R.string.dash_bar_auto_hide_detail),
         checked = theme.barAutoHide,
@@ -254,7 +256,7 @@ internal fun BarAutoHideSetting(theme: ThemeState) {
             modifier = Modifier.weight(1f)
         )
     }
-    SwitchHint(stringResource(R.string.dash_bar_swipe_up_detail))
+    SwitchHint(stringResource(if (rememberBarPosition() == BarPosition.TOP) R.string.dash_bar_swipe_down_detail else R.string.dash_bar_swipe_up_detail))
 }
 
 /**

@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Restaurar</string>
     <string name="settings_resume_music">Reanudar la música al arrancar</string>
     <string name="settings_resume_music_detail">La app que sonaba al apagar vuelve a sonar. Déjalo desactivado si el equipo ya lo hace.</string>
-    <string name="bar_items_title">Barra inferior</string>
+    <string name="bar_items_title">Barra</string>
     <string name="bar_items_custom">Elegir lo que muestra la barra</string>
     <string name="bar_items_theme">Desactivado: la barra del tema</string>
     <string name="bar_items_skin">Los indicadores solo aparecen con la barra estándar, no con un skin.</string>
