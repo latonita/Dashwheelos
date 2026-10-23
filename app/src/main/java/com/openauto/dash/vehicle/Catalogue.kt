@@ -26,6 +26,8 @@ object K {
     val GPS_SPEED = Key.Measurement<Double>("gps_speed", Domain.MOTION, DISPLAY, 5 * S, maxHz = 10, unit = "km/h")
     val SPEED = Key.BestOf("speed", VEHICLE_SPEED, GPS_SPEED)
     val STEERING_ANGLE = Key.Measurement<Double>("steering_angle", Domain.MOTION, DISPLAY, 3 * S, maxHz = 10, unit = "°")
+    /** Degrees (0-359, magnetic) from the car's own compass; not [GPS_SPEED]'s sibling: the GPS heading is a different thing and stays in the location feed. */
+    val CAR_HEADING = Key.Measurement<Double>("car_heading", Domain.MOTION, DISPLAY, 10 * S, maxHz = 2, unit = "°")
 
     // --- Powertrain
     val RPM = Key.Measurement<Double>("rpm", Domain.POWERTRAIN, DISPLAY, 3 * S, maxHz = 10, unit = "rpm")
@@ -41,6 +43,8 @@ object K {
     val FUEL_FLOW = Key.Measurement<Double>("fuel_flow", Domain.ENERGY, DISPLAY, 5 * S, unit = "L/h")
     val BATTERY_VOLTS = Key.Measurement<Double>("battery_volts", Domain.ENERGY, WARNING, 60 * S, unit = "V")
     val FUEL_LEVEL = Key.Measurement<Double>("fuel_level", Domain.ENERGY, WARNING, 120 * S, unit = "%")
+    /** The tank in litres, for a box that measures litres: never converted to a percentage (the tank size is the app's guess, not the car's). */
+    val FUEL_LITRES = Key.Measurement<Double>("fuel_litres", Domain.ENERGY, DISPLAY, 120 * S, unit = "L")
     val RANGE = Key.Measurement<Double>("range", Domain.ENERGY, DISPLAY, 120 * S, unit = "km")
     /** What the car's trip computer says it is using now, in L/100 km (0 off the throttle). */
     val FUEL_CONSUMPTION = Key.Measurement<Double>("fuel_consumption", Domain.ENERGY, DISPLAY, 10 * S, unit = "L/100 km")
@@ -58,6 +62,11 @@ object K {
     /** Which lights are on, as the driver would say it ([CarLight]); [HEADLIGHTS] is the one the appearance follows. */
     val LIGHTS = Key.State<List<CarLight>>("lights", Domain.BODY, DISPLAY)
     val HANDBRAKE = Key.State<Boolean>("handbrake", Domain.BODY, DISPLAY)
+    /**
+     * The instrument-panel dimmer, 0..100 %. A level the driver turns through many steps, not a state: as a State
+     * every step would be a [VehicleEvent.Changed]. A slow measurement (a box repeats it within seconds).
+     */
+    val INSTRUMENT_DIMMER = Key.Measurement<Double>("instrument_dimmer", Domain.BODY, DISPLAY, 60 * S, unit = "%")
     /** True = unfastened. */
     val DRIVER_BELT = Key.State<Boolean>("driver_belt", Domain.BODY, WARNING)
 
@@ -65,6 +74,10 @@ object K {
     val CLIMATE = Key.State<Climate>("climate", Domain.CLIMATE, DISPLAY)
     val RADAR = Key.State<Radar>("radar", Domain.DRIVER_AIDS, SAFETY)
     val TYRES = Key.State<Map<TyrePos, Tyre>>("tyres", Domain.TYRES, WARNING)
+
+    // --- Identity
+    /** What the canbox names itself with (its 0xF0 reply). */
+    val CANBOX_VERSION = Key.Info<String>("canbox_version", Domain.IDENTITY, DISPLAY)
 
     // --- Trip
     val ODOMETER = Key.Counter("odometer", Domain.TRIP, DISPLAY, unit = "km")
@@ -74,7 +87,7 @@ object K {
     /** The whole catalogue (the BestOf ones are read-only). */
     val all: List<Key<*>> = listOf(
         VEHICLE_SPEED, GPS_SPEED, SPEED, STEERING_ANGLE, RPM, THROTTLE, ENGINE_LOAD, COOLANT_TEMP, INTAKE_TEMP,
-        ENGINE_RUNNING, GEAR, IGNITION, FUEL_FLOW, BATTERY_VOLTS, FUEL_LEVEL, RANGE, FUEL_CONSUMPTION, OUTSIDE_TEMP, FORECAST_TEMP,
-        AMBIENT_TEMP, DOORS, REVERSE, HEADLIGHTS, LIGHTS, HANDBRAKE, DRIVER_BELT, CLIMATE, RADAR, TYRES, ODOMETER, TRIP_DISTANCE
+        ENGINE_RUNNING, GEAR, IGNITION, FUEL_FLOW, BATTERY_VOLTS, FUEL_LEVEL, FUEL_LITRES, RANGE, FUEL_CONSUMPTION, OUTSIDE_TEMP, FORECAST_TEMP,
+        AMBIENT_TEMP, DOORS, REVERSE, HEADLIGHTS, LIGHTS, HANDBRAKE, INSTRUMENT_DIMMER, DRIVER_BELT, CLIMATE, RADAR, TYRES, ODOMETER, TRIP_DISTANCE, CAR_HEADING, CANBOX_VERSION
     )
 }

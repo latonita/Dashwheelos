@@ -14,7 +14,7 @@ A key names one element of car data: its value type, unit, kind, domain and crit
 | Slow measurement | `Key.Measurement<T>` (`ttlMs` 60 s to hours) | expires after `ttlMs` |
 | Discrete state | `Key.State<T>` | no clock: alive while its source is up; each change of the resolved value is also a `VehicleEvent.Changed` |
 | Counter | `Key.Counter` | a value lower than the same source's last is a glitch and is dropped |
-| Identity | `Key.Info<T>` | no expiry (defined; no key uses it yet) |
+| Identity | `Key.Info<T>` | no expiry (`CANBOX_VERSION`) |
 
 `Key.BestOf<T>(id, first, fallback...)` resolves to the first member that has a value; subscribing to it is demand for all members. `Domain` and `Criticality` are labels for the UI and for strictness; they never change resolution.
 
@@ -28,6 +28,7 @@ A key names one element of car data: its value type, unit, kind, domain and crit
 | `GPS_SPEED` | Double km/h, raw | Measurement 5 s | MOTION | DISPLAY |
 | `SPEED` | BestOf(VEHICLE_SPEED, GPS_SPEED) | | MOTION | SAFETY |
 | `STEERING_ANGLE` | Double degrees, right positive | Measurement 3 s | MOTION | DISPLAY |
+| `CAR_HEADING` | Double degrees, the car's own (magnetic) compass; not the GPS heading | Measurement 10 s | MOTION | DISPLAY |
 | `RPM`, `THROTTLE`, `ENGINE_LOAD` | Double | Measurement 3 s | POWERTRAIN | DISPLAY |
 | `COOLANT_TEMP` | Double C | Measurement 60 s | POWERTRAIN | WARNING |
 | `INTAKE_TEMP` | Double C | Measurement 60 s | POWERTRAIN | DISPLAY |
@@ -37,6 +38,7 @@ A key names one element of car data: its value type, unit, kind, domain and crit
 | `FUEL_FLOW` | Double L/h | Measurement 5 s | ENERGY | DISPLAY |
 | `BATTERY_VOLTS` | Double V | Measurement 60 s | ENERGY | WARNING |
 | `FUEL_LEVEL` | Double % | Measurement 120 s | ENERGY | WARNING |
+| `FUEL_LITRES` | Double L, a box that measures litres (never converted to a %) | Measurement 120 s | ENERGY | DISPLAY |
 | `RANGE` | Double km | Measurement 120 s | ENERGY | DISPLAY |
 | `FUEL_CONSUMPTION` | Double L/100 km, the car's trip computer | Measurement 10 s | ENERGY | DISPLAY |
 | `OUTSIDE_TEMP` | Double C, the car's sensor | Measurement 2 h | ENVIRONMENT | DISPLAY |
@@ -47,12 +49,14 @@ A key names one element of car data: its value type, unit, kind, domain and crit
 | `HEADLIGHTS` | Boolean (from the side lights up) | State | BODY | DISPLAY |
 | `LIGHTS` | `List<CarLight>` (hazard, beam, fogs) | State | BODY | DISPLAY |
 | `HANDBRAKE` | Boolean | State | BODY | DISPLAY |
+| `INSTRUMENT_DIMMER` | Double %, the instrument panel's dimmer | Measurement 60 s | BODY | DISPLAY |
 | `DRIVER_BELT` | Boolean, true = unfastened | State | BODY | WARNING |
 | `CLIMATE` | `Climate` | State | CLIMATE | DISPLAY |
 | `RADAR` | `Radar` | State | DRIVER_AIDS | SAFETY |
 | `TYRES` | `Map<TyrePos, Tyre>` | State | TYRES | WARNING |
 | `ODOMETER` | Double km | Counter | TRIP | DISPLAY |
 | `TRIP_DISTANCE` | Double km, the car's trip counter (the driver resets it, so not a Counter) | Measurement 6 h | TRIP | DISPLAY |
+| `CANBOX_VERSION` | String, what the canbox names itself with | Info | IDENTITY | DISPLAY |
 
 ## 2. Sources
 
@@ -66,7 +70,7 @@ A key names one element of car data: its value type, unit, kind, domain and crit
 | `qf.car_app` | VEHICLE_APP | VEHICLE_SPEED, RPM (6 s), FUEL_LEVEL, RANGE (6 h), ODOMETER, FUEL_CONSUMPTION, TRIP_DISTANCE, HEADLIGHTS, LIGHTS, DRIVER_BELT, HANDBRAKE (on a change), CLIMATE, RADAR, DOORS, REVERSE, STEERING_ANGLE (1 h) | not taken down as a whole; a body silent for 30 s withdraws the states the body puts (lights, belt, handbrake) |
 | `qf.mcu` | MCU | DOORS, HEADLIGHTS, HANDBRAKE, BATTERY_VOLTS (10 min) | 10 min, at once when the MCU service dies |
 | `qf.broadcast` | VEHICLE_APP | OUTSIDE_TEMP (2 h, a restored one with its real age), HEADLIGHTS, BATTERY_VOLTS (the firmware's property) | none (speaks on a change; lives with the app) |
-| `unit.bus` | CANBOX | VEHICLE_SPEED, RPM, DOORS, REVERSE, HEADLIGHTS, BATTERY_VOLTS, OUTSIDE_TEMP, STEERING_ANGLE, as the family's adapter decodes them | per family: FYT 30 s, MTC 15 s; at once when the family's `listening` goes false |
+| `unit.bus` | CANBOX | VEHICLE_SPEED, RPM, DOORS, REVERSE, HEADLIGHTS, BATTERY_VOLTS, OUTSIDE_TEMP, STEERING_ANGLE, as the family's adapter decodes them; XYAuto (the Hiworld JPF2 / JPF20L canbox, `XyautoBusPublisher`) also ENGINE_LOAD, THROTTLE, COOLANT_TEMP, INTAKE_TEMP, ENGINE_RUNNING, GEAR, HANDBRAKE, FUEL_LEVEL, FUEL_LITRES, RANGE, ODOMETER, TYRES, INSTRUMENT_DIMMER, CAR_HEADING, CANBOX_VERSION | per family: FYT 30 s, MTC 15 s, XYAuto 5 s; at once when the family's `listening` goes false |
 | `tpms` | VEHICLE_APP | TYRES | 60 s (`TYRE_STALE_MS`) |
 | `power` | VEHICLE_APP | IGNITION | none |
 | `obd` | OBD | VEHICLE_SPEED, RPM, THROTTLE, ENGINE_LOAD, COOLANT_TEMP, INTAKE_TEMP, FUEL_FLOW, BATTERY_VOLTS (the adapter's own ATRV is DEGRADED), FUEL_LEVEL: only what the adapter answered in the poll just done | on disconnect |
@@ -129,6 +133,8 @@ Helpers over the keys, in `vehicle/`: `displaySpeedKmh` / `rememberDisplaySpeedK
 - **Capabilities (step 6).** `Cap` carries an optional `key`. The kinds of car data (DOORS, REVERSE, STEERING, RADAR, CLIMATE, BODY_TRIP, SPEED_RPM, VOLTS, HEADLIGHTS, OUTSIDE_TEMP, TYRES) name the key that stands for them (BODY_TRIP: the mileage; SPEED_RPM: the car's speed), and are live when `Vehicle.bus.has(key)` holds, whoever says it; nobody marks them (`UnitPlatform.used` / `usedNow()` combine the marks and the keys). The platform caps (IGNITION, SLEEP_SOON, VEHICLE_BUS, UNIT_KEYS, KEY_TARGETS, PHONE_BRIDGE, MEDIA_BRIDGE, VOLUME_UNIT, LAUNCHER_TAKEOVER, POPUP_HIDE, SLEEP_SURVIVAL, CAMERA_CONTROL, FREEFORM_BAR, BOOT_LOGO) still mark themselves. What a unit claims (`UnitCaps`) is unchanged; "offered" questions (which tiles to add, the first layout) ask `UnitPlatform.delivers(cap)`: claimed by the firmware, or data on the bus now. Asking `has` alone would drop a parked car's tiles from the add sheet.
 - **The demo is one source (step 6).** `DemoMode` puts every value the bus carries through the `demo` source only; it is `up(true)` while it runs and `clear()` + `up(false)` when it ends, so nothing is put back. It still writes to feeds for what is not on the bus (below).
 - **`ObdData` stays as an adapter (step 6).** `CareRules`, `LiveWatch`, `CarCare.watch`, `AiMechanic.watch` and the tiles drawn against the old record are written against `ObdData`'s 0 for unknown across hundreds of lines and three test files; giving them a nullable input type would touch every rule. `Gauges.toObdData()` and `rememberReadings` stay, at the edge, and the bus never sees the 0.
+
+- **XYAuto's canbox (`XyautoBusPublisher`).** The only class that knows both the decoders' `CanboxValue` and the keys; the decoders (`unitproto/.../canbox/`) know neither the app nor the bus, and a null inside a value is a withdrawal (`put(key, null)`, the heartbeat's "sensor lost"). Box silence is the `unit.bus` liveness, `silenceMs` 5 s: the JPF20L sends its heartbeat once a second and repeats every other frame within about 10 s, all of it only while the ignition is on. The plugin's pre-decoded speed and revs take the same path as 0xB3's (`unitBusSpeed` with the driver's correction, `unitBusRpm`). Speed and revs live the unit bus's 10 s hold; the other measurements keep their key's ttl, which is longer than the box's repeat. `FUEL_LEVEL` is only the box's percentage (0xB4) and the litres (0xB8) are `FUEL_LITRES`, never converted (the tank size is the app's guess): one writer per key, no flip-flop. `GEAR` is the lever: P, R, N, D; S (AutoStick, a held gear 1-4 the box does not say) reads as Drive, since `Gear.Forward(n)` needs a number a guess would get wrong. `TYRES` is the existing map; a wheel with no pressure is absent and no wheel at all withdraws the key (the type has no "unknown" temperature, so the WK's missing one reads 0). `INSTRUMENT_DIMMER` is a slow Measurement, not a State: the driver turns it through many steps, and a State would emit a `Changed` event for every one. `CAR_HEADING` is the car's compass, a different thing from the GPS heading of the location feed. The compass's 8-way sector is not a key (it is the heading, quantised).
 
 ## 5. What stays outside the bus
 
