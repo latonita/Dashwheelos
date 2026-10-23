@@ -113,13 +113,19 @@
     <string name="dash_effects_none_hint">Непрозрачные карточки, простые цифры, без свечения: читается на ярком солнце</string>
     <string name="dash_effects_reduced_hint">Мягкое свечение, стекло сохранено</string>
     <string name="dash_effects_full_hint">Все темы со всем свечением и стеклом</string>
-    <string name="dash_bar_title">Нижняя панель</string>
+    <string name="dash_bar_title">Панель</string>
     <string name="dash_bar_auto_hide">Автоскрытие панели</string>
     <string name="dash_bar_auto_hide_detail">Уезжает, когда не используется, освобождая место для панелей</string>
     <string name="dash_bar_hide_after">Скрывать через %1$d с</string>
     <string name="dash_bar_hide_now">Скрывать сразу</string>
     <string name="dash_bar_swipe_up_detail">Когда она скрыта, проведите вверх от нижнего края, чтобы вернуть её</string>
     <string name="dash_bar_swipe_up_hint">Проведите вверх для панели</string>
+    <string name="dash_bar_swipe_down_detail">Когда она скрыта, проведите вниз от верхнего края, чтобы вернуть её</string>
+    <string name="dash_bar_swipe_down_hint">Проведите вниз для панели</string>
+    <string name="dash_bar_position">Положение</string>
+    <string name="dash_bar_position_bottom">Внизу</string>
+    <string name="dash_bar_position_top">Вверху</string>
+    <string name="dash_bar_position_skin">Только стандартный вид может разместить панель вверху; у скинов собственная панель остаётся внизу.</string>
     <string name="dash_bar_show">Показать панель</string>
 
     <!-- Moving: edits wait until the car has stopped -->

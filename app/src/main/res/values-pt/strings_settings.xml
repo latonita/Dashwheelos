@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Restaurar</string>
     <string name="settings_resume_music">Retomar a música ao arrancar</string>
     <string name="settings_resume_music_detail">A app que tocava ao desligar volta a tocar. Deixe desligado se a unidade já o fizer.</string>
-    <string name="bar_items_title">Barra inferior</string>
+    <string name="bar_items_title">Barra</string>
     <string name="bar_items_custom">Escolher o que a barra mostra</string>
     <string name="bar_items_theme">Desativado: a barra do tema</string>
     <string name="bar_items_skin">Os indicadores só aparecem com a barra padrão, não com uma skin.</string>

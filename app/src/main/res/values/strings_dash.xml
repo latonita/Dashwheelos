@@ -113,13 +113,19 @@
     <string name="dash_effects_none_hint">Opaque cards, plain numerals, no glow: reads in full sun</string>
     <string name="dash_effects_reduced_hint">Softer glow, glass kept</string>
     <string name="dash_effects_full_hint">Every theme with all its glow and glass</string>
-    <string name="dash_bar_title">Bottom bar</string>
+    <string name="dash_bar_title">Bar</string>
     <string name="dash_bar_auto_hide">Auto-hide the bar</string>
     <string name="dash_bar_auto_hide_detail">Slides away when unused, for more room on the dashboards</string>
     <string name="dash_bar_hide_after">Hide after %1$d s</string>
     <string name="dash_bar_hide_now">Hide right away</string>
     <string name="dash_bar_swipe_up_detail">When it is hidden, swipe up from the bottom edge to bring it back</string>
     <string name="dash_bar_swipe_up_hint">Swipe up for the bar</string>
+    <string name="dash_bar_swipe_down_detail">When it is hidden, swipe down from the top edge to bring it back</string>
+    <string name="dash_bar_swipe_down_hint">Swipe down for the bar</string>
+    <string name="dash_bar_position">Position</string>
+    <string name="dash_bar_position_bottom">Bottom</string>
+    <string name="dash_bar_position_top">Top</string>
+    <string name="dash_bar_position_skin">Only the standard look can put the bar at the top; a skin keeps its own bar at the bottom.</string>
     <string name="dash_bar_show">Show the bar</string>
 
     <!-- Moving: edits wait until the car has stopped -->

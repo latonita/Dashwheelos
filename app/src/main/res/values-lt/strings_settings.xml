@@ -162,7 +162,7 @@
     <string name="settings_backup_confirm">Atkurti</string>
     <string name="settings_resume_music">Tęsti muziką paleidus</string>
     <string name="settings_resume_music_detail">Vėl groja programa, kuri grojo išjungiant. Palikite išjungtą, jei magnetola tai daro pati.</string>
-    <string name="bar_items_title">Apatinė juosta</string>
+    <string name="bar_items_title">Juosta</string>
     <string name="bar_items_custom">Pasirinkti, ką rodo juosta</string>
     <string name="bar_items_theme">Išjungta: juosta tokia, kokią piešia tema</string>
     <string name="bar_items_skin">Rodmenys matomi tik su standartine juosta, ne su apvalkalu.</string>

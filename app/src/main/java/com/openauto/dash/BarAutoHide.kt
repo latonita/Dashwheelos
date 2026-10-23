@@ -41,10 +41,11 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 /*
- * The bottom bar's auto-hide (Settings › Look): once the bar has sat unused
+ * The bar's auto-hide (Settings › Look): once the bar has sat unused
  * for the chosen number of seconds it slides away. It floats over the pages,
- * which keep the whole height either way; a slim pill over their bottom edge
- * shows where it went, and a swipe up from that edge brings it back.
+ * which keep the whole height either way; a slim pill over their edge on the
+ * bar's side shows where it went, and a swipe from that edge (up from the
+ * bottom one, down from the top one) brings it back.
  */
 
 /** Longest delay the Look settings offer before the bar hides, in seconds. */
@@ -61,7 +62,7 @@ private const val BAR_SLIDE_MS = 250
 /** Shortest wait before the bar hides: long enough for a menu opened by a tap to hold it. */
 private const val BAR_SETTLE_MS = 400L
 
-/** Band along the pages' bottom edge where a swipe up brings the hidden bar back. */
+/** Band along the pages' edge on the bar's side where a swipe toward the middle brings the hidden bar back. */
 private val REVEAL_EDGE = 48.dp
 
 /**
@@ -110,7 +111,7 @@ internal class BarAutoHideState {
 internal fun rememberBarAutoHideState(): BarAutoHideState = remember { BarAutoHideState() }
 
 /**
- * The bottom bar ([bar]) floating over the pages, hiding itself after
+ * The bar ([bar]) floating over the pages, hiding itself after
  * [hideSeconds] unused seconds. A finger on the bar, a menu open from it or a
  * tip of the tour pointing at it keeps it up; the wait starts again once they
  * let go.
@@ -125,6 +126,7 @@ internal fun AutoHidingBar(
     state: BarAutoHideState,
     hideSeconds: Int,
     modifier: Modifier = Modifier,
+    position: BarPosition = BarPosition.BOTTOM,
     bar: @Composable () -> Unit
 ) {
     var pressing by remember { mutableStateOf(false) }
@@ -145,8 +147,9 @@ internal fun AutoHidingBar(
     AnimatedVisibility(
         visibleState = state.visible,
         modifier = modifier.fillMaxWidth(),
-        enter = slideInVertically(tween(BAR_SLIDE_MS)) { it } + fadeIn(tween(BAR_SLIDE_MS)),
-        exit = slideOutVertically(tween(BAR_SLIDE_MS)) { it } + fadeOut(tween(BAR_SLIDE_MS))
+        // Slides in from the edge it stands on.
+        enter = slideInVertically(tween(BAR_SLIDE_MS)) { if (position == BarPosition.TOP) -it else it } + fadeIn(tween(BAR_SLIDE_MS)),
+        exit = slideOutVertically(tween(BAR_SLIDE_MS)) { if (position == BarPosition.TOP) -it else it } + fadeOut(tween(BAR_SLIDE_MS))
     ) {
         Box(
             modifier = Modifier
@@ -171,19 +174,21 @@ internal fun AutoHidingBar(
 }
 
 /**
- * On the pages: while the bar is hidden, a swipe up that starts in the band
- * along their bottom edge brings it back ([onRevealed] runs as it does).
- * Taps there still reach the tiles, and a sideways swipe still turns the
- * page; only a swipe going up is taken, before the pages can scroll with it.
+ * On the pages: while the bar is hidden, a swipe that starts in the band
+ * along their edge on the bar's [position] and goes toward the middle (up
+ * from the bottom, down from the top) brings it back ([onRevealed] runs as
+ * it does). Taps there still reach the tiles, and a sideways swipe still
+ * turns the page; only a swipe going that way is taken, before the pages can
+ * scroll with it.
  */
-internal fun Modifier.swipeUpRevealsBar(state: BarAutoHideState, onRevealed: () -> Unit): Modifier =
-    pointerInput(state, onRevealed) {
+internal fun Modifier.swipeRevealsBar(state: BarAutoHideState, position: BarPosition, onRevealed: () -> Unit): Modifier =
+    pointerInput(state, position, onRevealed) {
         val edge = REVEAL_EDGE.toPx()
         val slop = viewConfiguration.touchSlop
         val threshold = 16.dp.toPx()
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            if (!state.hidden || down.position.y < size.height - edge) return@awaitEachGesture
+            if (!state.hidden || !inBarEdge(position, down.position.y, size.height, edge)) return@awaitEachGesture
             var dx = 0f
             var dy = 0f
             var claimed = false
@@ -198,11 +203,11 @@ internal fun Modifier.swipeUpRevealsBar(state: BarAutoHideState, onRevealed: () 
                 if (!claimed) {
                     // Sideways first: that is the pages' own swipe.
                     if (abs(dx) > slop && abs(dx) > abs(dy)) break
-                    if (-dy > slop) claimed = true
+                    if (barPull(position, dy) > slop) claimed = true
                 }
                 if (claimed) {
                     change.consume()
-                    if (!revealed && -dy >= threshold) {
+                    if (!revealed && barPull(position, dy) >= threshold) {
                         revealed = true
                         state.reveal()
                         onRevealed()
@@ -213,13 +218,14 @@ internal fun Modifier.swipeUpRevealsBar(state: BarAutoHideState, onRevealed: () 
     }
 
 /**
- * Drawn over the pages' bottom edge while the bar is hidden: a slim pill, and
- * for a few seconds after the bar goes the words "swipe up" above it. A tap
- * on the pill brings the bar back as well as the swipe, which the pages read
- * ([swipeUpRevealsBar]): on some units the swipe also pulls in Android's own bars.
+ * Drawn over the pages' edge on the bar's side while the bar is hidden: a
+ * slim pill, and for a few seconds after the bar goes the words "swipe up"
+ * (down, for the top bar) on its inner side. A tap on the pill brings the bar
+ * back as well as the swipe, which the pages read ([swipeRevealsBar]): on some
+ * units the swipe also pulls in Android's own bars.
  */
 @Composable
-internal fun BarHandle(state: BarAutoHideState, modifier: Modifier = Modifier) {
+internal fun BarHandle(state: BarAutoHideState, position: BarPosition, modifier: Modifier = Modifier) {
     if (!state.hidden) return
     var words by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
@@ -227,6 +233,7 @@ internal fun BarHandle(state: BarAutoHideState, modifier: Modifier = Modifier) {
         words = false
     }
     val label = stringResource(R.string.dash_bar_show)
+    val top = position == BarPosition.TOP
     Column(
         modifier = modifier
             .clickable(
@@ -235,28 +242,33 @@ internal fun BarHandle(state: BarAutoHideState, modifier: Modifier = Modifier) {
                 onClickLabel = label
             ) { state.reveal() }
             .semantics { contentDescription = label }
-            .padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 4.dp),
+            .padding(start = 40.dp, end = 40.dp, top = if (top) 4.dp else 12.dp, bottom = if (top) 12.dp else 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // The pill stays on the edge, the words on its inner side.
+        val pill: @Composable () -> Unit = {
+            Box(
+                Modifier
+                    .padding(top = if (top) 4.dp else 8.dp, bottom = if (top) 8.dp else 4.dp)
+                    .size(width = 72.dp, height = 5.dp)
+                    .clip(DashShape.Pill)
+                    .background(DashColors.TextSecondary.copy(alpha = 0.55f))
+            )
+        }
+        if (top) pill()
         AnimatedVisibility(words, enter = fadeIn(), exit = fadeOut()) {
             Text(
-                stringResource(R.string.dash_bar_swipe_up_hint),
+                stringResource(if (top) R.string.dash_bar_swipe_down_hint else R.string.dash_bar_swipe_up_hint),
                 color = DashColors.TextPrimary,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 modifier = Modifier
-                    .padding(bottom = 6.dp)
+                    .padding(top = if (top) 6.dp else 0.dp, bottom = if (top) 0.dp else 6.dp)
                     .clip(DashShape.Pill)
                     .background(DashColors.Card.copy(alpha = 1f))
                     .padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
-        Box(
-            Modifier
-                .padding(top = 8.dp, bottom = 4.dp)
-                .size(width = 72.dp, height = 5.dp)
-                .clip(DashShape.Pill)
-                .background(DashColors.TextSecondary.copy(alpha = 0.55f))
-        )
+        if (!top) pill()
     }
 }

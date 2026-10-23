@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Ripristina</string>
     <string name="settings_resume_music">Riprendi la musica all\'avvio</string>
     <string name="settings_resume_music_detail">L\'app che suonava allo spegnimento riprende. Lascia spento se l\'unità lo fa già.</string>
-    <string name="bar_items_title">Barra in basso</string>
+    <string name="bar_items_title">Barra</string>
     <string name="bar_items_custom">Scegli cosa mostra la barra</string>
     <string name="bar_items_theme">Disattivato: la barra del tema</string>
     <string name="bar_items_skin">Gli indicatori compaiono solo con la barra standard, non con una skin.</string>
