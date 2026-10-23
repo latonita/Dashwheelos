@@ -53,9 +53,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -64,6 +66,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -82,27 +85,26 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.maplibre.android.MapLibre
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.location.LocationComponentActivationOptions
-import org.maplibre.android.location.LocationComponent
-import org.maplibre.android.location.LocationComponentOptions
-import org.maplibre.android.location.OnCameraTrackingChangedListener
-import org.maplibre.android.location.modes.CameraMode
-import org.maplibre.android.location.modes.RenderMode
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapLibreMapOptions
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.FillExtrusionLayer
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.sources.VectorSource
+import com.mapbox.mapboxsdk.Mapbox
+import com.mapbox.mapboxsdk.annotations.MarkerOptions
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
+import com.mapbox.mapboxsdk.geometry.LatLng
+import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions
+import com.mapbox.mapboxsdk.location.LocationComponent
+import com.mapbox.mapboxsdk.location.LocationComponentOptions
+import com.mapbox.mapboxsdk.location.OnCameraTrackingChangedListener
+import com.mapbox.mapboxsdk.location.modes.CameraMode
+import com.mapbox.mapboxsdk.location.modes.RenderMode
+import com.mapbox.mapboxsdk.maps.MapboxMap
+import com.mapbox.mapboxsdk.maps.MapboxMapOptions
+import com.mapbox.mapboxsdk.maps.MapView
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.style.expressions.Expression
+import com.mapbox.mapboxsdk.style.layers.FillExtrusionLayer
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.sources.VectorSource
 import org.maplibre.geojson.Point
-import org.maplibre.navigation.android.navigation.ui.v5.route.NavigationMapRoute
 import org.maplibre.navigation.core.models.DirectionsResponse
 import org.maplibre.navigation.core.models.DirectionsRoute
 import org.maplibre.navigation.core.models.RouteOptions
@@ -113,8 +115,12 @@ import java.util.Locale
 // router can be pointed at the driver's own servers ([MapServers]).
 private const val USER_AGENT = "OpenAutoDash/1.0 (car launcher)"
 
-private val Accent = Color(0xFF8AB4F8)
-private val OverlayBg = Color(0xE6141518)
+// The dashboard's accent, not a fixed blue: the map's controls change with the look.
+private val Accent: Color get() = DashColors.Accent
+// Panels over the map: the theme's card as a scrim (nearly opaque, so the map shows only faintly), with its own text colours.
+private val OverlayBg: Color get() = DashColors.Card.copy(alpha = 0.92f)
+// Accent for marks on those panels (icons): the ink that reads against the theme's page.
+private val AccentMark: Color get() = DashColors.AccentInk
 
 /**
  * A free, open-source **GPS navigator** built on MapLibre GL:
@@ -155,12 +161,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     }
 
     val mapView = remember {
-        MapLibre.getInstance(context)
-        val options = MapLibreMapOptions.createFromAttributes(context, null).textureMode(true)
+        Mapbox.getInstance(context)
+        val options = MapboxMapOptions.createFromAttributes(context, null).textureMode(true)
         MapView(context, options).also { if (wallpaper) it.setMaximumFps(WALLPAPER_FPS) }
     }
 
-    var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapRef by remember { mutableStateOf<MapboxMap?>(null) }
     // On a page the pagers keep composed beside the one on screen nobody sees
     // the map, yet a camera following the car redrew it every frame: it runs
     // at [HIDDEN_FPS] there, and back at its own pace (uncapped, or the
@@ -172,7 +178,9 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         if (pageActive) mapRef?.triggerRepaint()
     }
 
-    var navRoute by remember { mutableStateOf<NavigationMapRoute?>(null) }
+    var navRoute by remember { mutableStateOf<RouteLine?>(null) }
+    // Map listeners are set once; the route line is rebuilt per style (below).
+    var listenersSet by remember { mutableStateOf(false) }
     var route by remember { mutableStateOf<DirectionsRoute?>(null) }
     var destination by remember { mutableStateOf<Point?>(null) }
     // What the destination is called: the address typed, a saved place's name; null for a spot picked on the map.
@@ -184,7 +192,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
 
     fun clearRoute() {
         route = null; destination = null; destinationName = null; info = null; error = null
-        navRoute?.removeRoute()
+        navRoute?.clear()
         mapRef?.markers?.forEach { mapRef?.removeMarker(it) }
     }
 
@@ -214,7 +222,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                 val first = resp.routes.firstOrNull()
                 if (first == null) { error = context.getString(R.string.info_map_no_route); return@onSuccess }
                 route = first
-                navRoute?.addRoutes(resp.routes)
+                navRoute?.showAll(resp.routes)
                 info = formatEta(context, first.distance, first.duration)
                 map.animateCamera(
                     CameraUpdateFactory.newLatLngZoom(LatLng(dest.latitude(), dest.longitude()), 13.0)
@@ -341,6 +349,11 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     val lightMap = DashColors.Light
     // The listener below is registered once; it reads the lock's latest state.
     val movingNow = rememberUpdatedState(moving)
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    // Whether the destination box holds the cursor, so a touch of the map can
+    // put it down again — and only then, so every other touch is left alone.
+    val searchFocused = remember { mutableStateOf(false) }
     MapServers.load(context)
     val servers by MapServers.current.collectAsState()
     val styleUrl = if (lightMap) servers.styleLight else servers.styleDark
@@ -348,8 +361,49 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
             add3dBuildings(style, lightMap)
-            if (navRoute == null) {
-                navRoute = NavigationMapRoute(mapView, map)
+            // The route's source and layers belong to the style, and switching
+            // between the day and night styles builds a new one — so the line
+            // has to be made again each time or it disappears with the old
+            // style, in silence, leaving a guided route with nothing drawn.
+            navRoute = RouteLine(style, DashColors.Accent)
+            // Redrawn too: the new line starts empty, and the route being
+            // followed is not interrupted by the driver changing the map's look.
+            InAppNav.guidance.value?.route?.let { navRoute?.show(it) }
+            if (!listenersSet) {
+                listenersSet = true
+                // Touching the map puts the keyboard away.
+                //
+                // It has to come from the map's own callbacks. The map is a real
+                // Android View, so a touch that lands on it is dispatched by the
+                // Android view hierarchy and never passes through Compose's
+                // pointer input — no modifier on the AndroidView can see it.
+                // Until this, the keyboard covered the bottom half of the screen,
+                // the Start button with it, and nothing would put it down: the
+                // box kept the cursor, the map swallowed the touch, and these
+                // units' keyboards carry no hide key of their own.
+                //
+                // A tap and a drag are both a dismissal, so both are taken; false
+                // leaves the tap to the map, which has its own use for it.
+                //
+                // Clearing the focus is not enough on its own: with the
+                // destination box the only thing in the panel that can hold
+                // focus, Compose hands it straight back — measured at 30ms —
+                // and the keyboard returns. The focus has to go *somewhere*,
+                // and the map is the right somewhere: it is a real View and
+                // focusable in touch mode, so the driver's touch lands where
+                // they aimed it. The same hand-off at startup stops the box
+                // from grabbing the cursor before anyone has asked to type.
+                fun dismissSearch() {
+                    if (!searchFocused.value) return
+                    keyboard?.hide()
+                    focusManager.clearFocus(force = true)
+                    mapView.requestFocus()
+                }
+                map.addOnMapClickListener { dismissSearch(); false }
+                map.addOnCameraMoveStartedListener { dismissSearch() }
+                // The map takes the focus first, so the keyboard does not open
+                // over the map the moment the dashboard appears.
+                mapView.requestFocus()
                 // A destination is set by a long press, not a tap: a tap while
                 // panning, or a knock on the screen in a bumpy lane, used to
                 // drop the route being followed and start a new one. Never
@@ -375,18 +429,30 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(navRoute, guidedRoute) {
         val line = navRoute ?: return@LaunchedEffect
         if (guidedRoute != null) {
-            line.addRoute(guidedRoute)
+            line.show(guidedRoute)
             wasGuiding = true
         } else if (wasGuiding) {
             wasGuiding = false
             clearRoute()
         }
     }
-    DisposableEffect(navRoute, navigation) {
-        val line = navRoute
-        val nav = navigation
-        if (line != null && nav != null) runCatching { line.addProgressChangeListener(nav) }
-        onDispose { if (line != null && nav != null) runCatching { line.removeProgressChangeListener(nav) } }
+
+    // The route line and the puck are the map's own layers, not Compose: they
+    // take the accent again when the look changes (and while it fades).
+    LaunchedEffect(navRoute) {
+        val line = navRoute ?: return@LaunchedEffect
+        snapshotFlow { DashColors.Accent }.collect { line.tint(it) }
+    }
+    LaunchedEffect(mapRef, styleReady) {
+        val map = mapRef ?: return@LaunchedEffect
+        if (!styleReady) return@LaunchedEffect
+        snapshotFlow { DashColors.Accent }.collect { accent ->
+            map.uiSettings.setAttributionTintColor(accent.toArgb())
+            runCatching {
+                val lc = map.locationComponent
+                if (lc.isLocationComponentActivated) lc.applyStyle(puckOptions(context, accent))
+            }
+        }
     }
 
     // Location puck: enabled once the style is up, and again if the permission
@@ -404,8 +470,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             // Destination search bar. Searching from the IME key, the search button
             // or a hardware Enter all dismiss the keyboard first so the map is
             // visible while the route loads.
-            val keyboard = LocalSoftwareKeyboardController.current
-            val focusManager = LocalFocusManager.current
             fun submitSearch() {
                 keyboard?.hide()
                 focusManager.clearFocus()
@@ -427,11 +491,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text(stringResource(if (moving) R.string.dash_drive_lock_notice else R.string.info_map_where_to), color = Color(0xFF9AA0A6)) },
+                        placeholder = { Text(stringResource(if (moving) R.string.dash_drive_lock_notice else R.string.info_map_where_to), color = DashColors.Muted) },
                         enabled = !moving,
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
+                            .onFocusChanged { searchFocused.value = it.isFocused }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyUp &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -440,10 +505,10 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                                 } else false
                             },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = DashColors.TextPrimary,
+                            unfocusedTextColor = DashColors.TextPrimary,
                             focusedBorderColor = Accent,
-                            unfocusedBorderColor = Color(0xFF2A2D33),
+                            unfocusedBorderColor = DashColors.Muted.copy(alpha = 0.4f),
                             cursorColor = Accent
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -460,12 +525,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                         CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Accent, strokeWidth = 3.dp)
                     } else {
                         IconButton(onClick = { submitSearch() }) {
-                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.info_map_search), tint = Accent)
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.info_map_search), tint = AccentMark)
                         }
                     }
                     if (route != null) {
                         IconButton(onClick = { clearRoute() }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.info_map_clear_route), tint = Color(0xFF9AA0A6))
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.info_map_clear_route), tint = DashColors.Muted)
                         }
                     }
                 }
@@ -496,12 +561,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     ) {
                         Text(
                             text = currentInfo ?: currentError ?: stringResource(R.string.info_map_ready),
-                            color = if (currentError != null) Color(0xFFF28B82) else Color.White
+                            color = if (currentError != null) DashColors.Critical else DashColors.TextPrimary
                         )
                         if (hasDest) {
                             Button(
                                 onClick = { destination?.let { startGuidance(it) } },
-                                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF0B0C0F)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = DashColors.OnAccent),
                                 modifier = Modifier.heightIn(min = DashSize.TouchPrimary)
                             ) {
                                 Icon(Icons.Filled.Navigation, contentDescription = null, modifier = Modifier.size(22.dp))
@@ -511,7 +576,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                             // The same trip in Google Maps or Waze instead.
                             if (route != null) {
                                 IconButton(onClick = { destination?.let { startGuidance(it, inOtherApp = true) } }) {
-                                    Icon(Icons.Filled.OpenInNew, contentDescription = stringResource(R.string.info_map_other_app), tint = Color(0xFF9AA0A6))
+                                    Icon(Icons.Filled.OpenInNew, contentDescription = stringResource(R.string.info_map_other_app), tint = DashColors.Muted)
                                 }
                             }
                         }
@@ -539,7 +604,7 @@ private fun GuidancePanel(guidance: InAppNav.Guidance, modifier: Modifier = Modi
                     guidance.rerouting -> stringResource(R.string.info_map_rerouting)
                     else -> guidance.remaining.ifEmpty { stringResource(R.string.info_map_ready) }
                 },
-                color = Color.White
+                color = DashColors.TextPrimary
             )
             IconButton(
                 onClick = { InAppNav.setVoice(context, !voiceOn) },
@@ -548,12 +613,12 @@ private fun GuidancePanel(guidance: InAppNav.Guidance, modifier: Modifier = Modi
                 Icon(
                     if (voiceOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                     contentDescription = stringResource(if (voiceOn) R.string.info_map_voice_off else R.string.info_map_voice_on),
-                    tint = if (voiceOn) Accent else Color(0xFF9AA0A6)
+                    tint = if (voiceOn) AccentMark else DashColors.Muted
                 )
             }
             Button(
                 onClick = { InAppNav.stop() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A2D33), contentColor = Color.White),
+                colors = ButtonDefaults.buttonColors(containerColor = DashColors.CardHi, contentColor = DashColors.TextPrimary),
                 modifier = Modifier.heightIn(min = DashSize.TouchPrimary)
             ) {
                 Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(22.dp))
@@ -564,9 +629,20 @@ private fun GuidancePanel(guidance: InAppNav.Guidance, modifier: Modifier = Modi
     }
 }
 
+/** The location puck in the dashboard's accent: the dot, the heading arrow and the accuracy disc. */
+private fun puckOptions(context: Context, accent: Color): LocationComponentOptions {
+    val argb = accent.toArgb()
+    return LocationComponentOptions.builder(context)
+        .trackingGesturesManagement(true)
+        .foregroundTintColor(argb)
+        .bearingTintColor(argb)
+        .accuracyColor(argb)
+        .build()
+}
+
 @SuppressLint("MissingPermission")
 private fun enableLocation(
-    map: MapLibreMap,
+    map: MapboxMap,
     style: Style,
     context: Context,
     scope: kotlinx.coroutines.CoroutineScope,
@@ -582,9 +658,7 @@ private fun enableLocation(
             lc.activateLocationComponent(
                 LocationComponentActivationOptions.builder(context, style)
                     .locationComponentOptions(
-                        LocationComponentOptions.builder(context)
-                            .trackingGesturesManagement(true)
-                            .build()
+                        puckOptions(context, DashColors.Accent)
                     )
                     .build()
             )
@@ -592,7 +666,7 @@ private fun enableLocation(
             // to; route previews and search hits don't change it.
             var byGesture = false
             map.addOnCameraMoveStartedListener { reason ->
-                byGesture = reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE
+                byGesture = reason == MapboxMap.OnCameraMoveStartedListener.REASON_API_GESTURE
             }
             map.addOnCameraIdleListener {
                 if (byGesture) userZooms[map] = map.cameraPosition.zoom
@@ -643,7 +717,7 @@ private fun enableLocation(
 private const val TRACKING_RESUME_MS = 10_000L
 
 /** Zoom last set by a pinch on each map; tracking resumes at it instead of the default. */
-private val userZooms = java.util.WeakHashMap<MapLibreMap, Double>()
+private val userZooms = java.util.WeakHashMap<MapboxMap, Double>()
 
 /** Follow position and heading with the driving-nav zoom and pitch, keeping tracking on. */
 private fun followVehicle(lc: LocationComponent, wallpaper: MapView? = null, zoom: Double? = null) {
@@ -726,9 +800,9 @@ private fun PlaceChips(places: Places, onPick: (Place) -> Unit) {
                     modifier = Modifier.heightIn(min = DashSize.TouchPrimary).padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp))
+                    Icon(icon, contentDescription = null, tint = AccentMark, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(label, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+                    Text(label, color = DashColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
                 }
             }
         }

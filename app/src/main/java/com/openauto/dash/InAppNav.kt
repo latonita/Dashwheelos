@@ -5,7 +5,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.os.Looper
 import android.util.Log
 import android.view.View
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +19,6 @@ import kotlinx.coroutines.withContext
 import org.maplibre.geojson.Point
 import org.maplibre.navigation.android.navigation.ui.v5.instruction.maneuver.ManeuverView
 import org.maplibre.navigation.core.location.Location
-import org.maplibre.navigation.core.location.engine.MapLibreLocationEngine
 import org.maplibre.navigation.core.milestone.Milestone
 import org.maplibre.navigation.core.milestone.MilestoneEventListener
 import org.maplibre.navigation.core.milestone.VoiceInstructionMilestone
@@ -119,7 +117,12 @@ object InAppNav {
         appContext = app
         _voiceOn.value = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_VOICE, true)
         val nav = runCatching {
-            AndroidMapLibreNavigation(app, MapLibreNavigationOptions(), MapLibreLocationEngine(app, Looper.getMainLooper()))
+            // The position comes from the dashboard's own feed, not from the
+            // SDK's MapLibreLocationEngine: that one is the single class in the
+            // navigation SDK that reaches into the map SDK, which is pinned
+            // back to 10.x here for OpenGL ES 2.0 and has those classes under
+            // different names. See FeedLocationEngine.
+            AndroidMapLibreNavigation(app, MapLibreNavigationOptions(), FeedLocationEngine(app))
         }.getOrElse {
             Log.w("InAppNav", "navigation failed to start: ${it.message}")
             return false
