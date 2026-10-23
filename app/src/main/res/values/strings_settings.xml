@@ -183,6 +183,8 @@
     <string name="bar_item_phone">Phone</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Outside</string>
+    <string name="bar_item_space">Space</string>
+    <string name="bar_item_stretch">Stretch</string>
     <string name="bar_look_labels">Labels</string>
     <string name="bar_look_labels_hint">A caption under every readout.</string>
     <string name="bar_look_compact">Compact</string>

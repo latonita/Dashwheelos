@@ -181,6 +181,8 @@
     <string name="bar_item_phone">Telefon</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Na zewnątrz</string>
+    <string name="bar_item_space">Odstęp</string>
+    <string name="bar_item_stretch">Rozciągnij</string>
     <string name="bar_look_labels">Podpisy</string>
     <string name="bar_look_labels_hint">Podpis pod każdym wskaźnikiem.</string>
     <string name="bar_look_compact">Kompaktowy</string>

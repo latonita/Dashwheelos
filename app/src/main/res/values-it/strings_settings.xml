@@ -181,6 +181,8 @@
     <string name="bar_item_phone">Telefono</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Esterno</string>
+    <string name="bar_item_space">Spazio</string>
+    <string name="bar_item_stretch">Estendi</string>
     <string name="bar_look_labels">Etichette</string>
     <string name="bar_look_labels_hint">Un\'etichetta sotto ogni indicatore.</string>
     <string name="bar_look_compact">Compatto</string>

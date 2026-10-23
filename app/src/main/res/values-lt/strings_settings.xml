@@ -182,6 +182,8 @@
     <string name="bar_item_phone">Telefonas</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Lauke</string>
+    <string name="bar_item_space">Tarpas</string>
+    <string name="bar_item_stretch">Ištempti</string>
     <string name="bar_look_labels">Užrašai</string>
     <string name="bar_look_labels_hint">Užrašas po kiekvienu rodmeniu.</string>
     <string name="bar_look_compact">Kompaktiška</string>
