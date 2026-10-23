@@ -93,6 +93,41 @@ class UnitDetectorTest {
     }
 
     @Test
+    fun anXyauto9320_isXyauto() {
+        // The CAN stack (host + the per-brand plugin) on an AC8227L, behind AOSP's own launcher.
+        val p = MapProbe(
+            props = mapOf("ro.board.platform" to "ac8227l", "ro.hardware" to "ac8227l", "ro.build.version.release" to "8.1.0"),
+            packages = setOf("com.kyhero.car.myhost", "com.kyhero.car.myplugin.canbus", "com.android.launcher"),
+            sdkInt = 27, brand = "alps", model = "9320"
+        )
+        val d = UnitDetector.detect(p)
+        assertEquals(UnitFamily.XYAUTO, d.family)
+        assertTrue(d.evidence.first().strong)
+        // Reglink lives on MediaTek too, but none of its own clues is here.
+        assertFalse(d.runnersUp.containsKey(UnitFamily.REGLINK))
+    }
+
+    @Test
+    fun anXyautoWithItsPackagesHidden_isStillXyauto_onTheBoardAlone() {
+        // Package visibility hides the CAN stack: the two board properties are two weak clues.
+        val hidden = MapProbe(props = mapOf("ro.board.platform" to "ac8257", "ro.hardware" to "ac8257"))
+        assertEquals(UnitFamily.XYAUTO, UnitDetector.detect(hidden).family)
+        // One of them alone is not enough.
+        assertEquals(UnitFamily.GENERIC, UnitDetector.detect(MapProbe(props = mapOf("ro.hardware" to "ac8227l"))).family)
+    }
+
+    @Test
+    fun aReglinkMediaTekBoard_isNotXyauto() {
+        // Another MediaTek board, with Reglink's own clues: the AC822x list does not take it.
+        val p = MapProbe(props = mapOf("ro.board.platform" to "mt6765", "ro.hardware" to "mt6765", "persist.duraspeed.support" to "1"))
+        val d = UnitDetector.detect(p)
+        assertEquals(UnitFamily.REGLINK, d.family)
+        assertFalse(d.runnersUp.containsKey(UnitFamily.XYAUTO))
+        // AOSP's launcher on a board nobody claims names no family at all.
+        assertEquals(UnitFamily.GENERIC, UnitDetector.detect(MapProbe(packages = setOf("com.android.launcher"), props = mapOf("ro.board.platform" to "mt8127"))).family)
+    }
+
+    @Test
     fun anAllwinnerT8_isAllwinner_onTwoWeakClues() {
         val p = MapProbe(props = mapOf("ro.board.platform" to "sun50iw1p1", "ro.hardware" to "sun50iw1p1"))
         assertEquals(UnitFamily.ALLWINNER, UnitDetector.detect(p).family)

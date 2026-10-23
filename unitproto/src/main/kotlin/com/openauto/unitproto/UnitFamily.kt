@@ -22,6 +22,8 @@ enum class UnitFamily {
     ALLWINNER,
     /** Nowadays (NWD) units: persist.nwd.launcher.default. */
     NWD,
+    /** XYAuto "9320"-class units on MediaTek AC8227L / AC8257: com.kyhero.car.myhost. */
+    XYAUTO,
     /** Nothing recognised: plain Android. */
     GENERIC,
     /** Not probed yet. */
