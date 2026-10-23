@@ -181,6 +181,8 @@
     <string name="bar_item_phone">Telefoon</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Buiten</string>
+    <string name="bar_item_space">Ruimte</string>
+    <string name="bar_item_stretch">Uitrekken</string>
     <string name="bar_look_labels">Labels</string>
     <string name="bar_look_labels_hint">Een label onder elke weergave.</string>
     <string name="bar_look_compact">Compact</string>

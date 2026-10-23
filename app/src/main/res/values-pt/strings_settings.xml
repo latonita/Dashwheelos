@@ -181,6 +181,8 @@
     <string name="bar_item_phone">Telemóvel</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Exterior</string>
+    <string name="bar_item_space">Espaço</string>
+    <string name="bar_item_stretch">Esticar</string>
     <string name="bar_look_labels">Legendas</string>
     <string name="bar_look_labels_hint">Uma legenda sob cada indicador.</string>
     <string name="bar_look_compact">Compacto</string>

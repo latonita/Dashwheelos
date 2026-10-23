@@ -181,6 +181,8 @@
     <string name="bar_item_phone">Handy</string>
     <string name="bar_item_obd">OBD</string>
     <string name="bar_item_outside">Außen</string>
+    <string name="bar_item_space">Abstand</string>
+    <string name="bar_item_stretch">Dehnen</string>
     <string name="bar_look_labels">Beschriftet</string>
     <string name="bar_look_labels_hint">Eine Beschriftung unter jeder Anzeige.</string>
     <string name="bar_look_compact">Kompakt</string>

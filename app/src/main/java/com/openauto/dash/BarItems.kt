@@ -44,6 +44,9 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.DeviceThermostat
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.ViewCompact
@@ -71,7 +74,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -97,8 +100,12 @@ import java.util.Locale
  * Until something is chosen the bar stays as each theme draws it.
  */
 
-/** One readout of the bar. Names are persisted: append, never rename. */
-enum class BarItem(@StringRes val label: Int, val icon: ImageVector) {
+/**
+ * One readout of the bar. Names are persisted: append, never rename. A
+ * [spacer] is empty room rather than a readout, and the only kind the bar
+ * may hold more than once.
+ */
+enum class BarItem(@StringRes val label: Int, val icon: ImageVector, val spacer: Boolean = false) {
     FUEL(R.string.bar_item_fuel, Icons.Filled.LocalGasStation),
     SPEED(R.string.bar_item_speed, Icons.Filled.Speed),
     REVS(R.string.bar_item_revs, Icons.Filled.Tune),
@@ -111,7 +118,14 @@ enum class BarItem(@StringRes val label: Int, val icon: ImageVector) {
     PHONE(R.string.bar_item_phone, Icons.Filled.PhoneAndroid),
     OBD(R.string.bar_item_obd, Icons.Filled.Cable),
     /** The car's outside temperature sensor, else the weather's. */
-    OUTSIDE(R.string.bar_item_outside, Icons.Filled.DeviceThermostat)
+    OUTSIDE(R.string.bar_item_outside, Icons.Filled.DeviceThermostat),
+    /** A fixed gap, about an icon wide. */
+    SPACE(R.string.bar_item_space, Icons.Filled.SpaceBar, spacer = true),
+    /**
+     * A gap that takes all the room the readouts leave: the bar then fills
+     * edge to edge instead of sitting in the middle. Several share it evenly.
+     */
+    STRETCH(R.string.bar_item_stretch, Icons.Filled.SettingsEthernet, spacer = true)
 }
 
 /**
@@ -212,7 +226,8 @@ internal object Radios {
 
 /**
  * The chosen readouts, left to right; those that no longer fit at the end are
- * left out whole, never squeezed.
+ * left out whole, never squeezed. Centred, unless a [BarItem.STRETCH] takes
+ * the room left over ([barPositions]).
  */
 @Composable
 internal fun BarReadouts(items: List<BarItem>, m: TopBarModel, modifier: Modifier = Modifier) {
@@ -220,29 +235,61 @@ internal fun BarReadouts(items: List<BarItem>, m: TopBarModel, modifier: Modifie
     Layout(
         content = {
             CompositionLocalProvider(LocalBarLook provides look) {
-                items.forEach { item -> Box(Modifier.padding(horizontal = if (look == BarLook.LABELS) 10.dp else 8.dp)) { BarReadout(item, m) } }
+                items.forEach { item ->
+                    when (item) {
+                        BarItem.SPACE -> Spacer(Modifier.width(SPACE_WIDTH))
+                        BarItem.STRETCH -> Spacer(Modifier.layoutId(STRETCH_ID))
+                        else -> Box(Modifier.padding(horizontal = if (look == BarLook.LABELS) 10.dp else 8.dp)) { BarReadout(item, m) }
+                    }
+                }
             }
         },
         modifier = modifier
     ) { measurables, constraints ->
-        var left = constraints.maxWidth
-        val placed = ArrayList<Placeable>()
-        for (m2 in measurables) {
-            val p = m2.measure(Constraints(maxHeight = constraints.maxHeight))
-            if (p.width > left) break
-            placed += p
-            left -= p.width
-        }
+        val all = measurables.map { it.measure(Constraints(maxHeight = constraints.maxHeight)) }
+        val bounded = constraints.hasBoundedWidth
+        val xs = barPositions(all.map { it.width }, measurables.map { it.layoutId == STRETCH_ID }, if (bounded) constraints.maxWidth else null)
+        val placed = all.take(xs.size)
         val height = (placed.maxOfOrNull { it.height } ?: 0).coerceIn(constraints.minHeight, constraints.maxHeight)
-        // Centred in the room they have, like the Mistral cluster in the middle of its bar.
-        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else constraints.maxWidth - left
+        val width = if (bounded) constraints.maxWidth else placed.sumOf { it.width }
         layout(width, height) {
-            var x = if (constraints.hasBoundedWidth) left / 2 else 0
-            placed.forEach { p ->
-                p.placeRelative(x, (height - p.height) / 2)
-                x += p.width
-            }
+            placed.forEachIndexed { i, p -> p.placeRelative(xs[i], (height - p.height) / 2) }
         }
+    }
+}
+
+/** A fixed [BarItem.SPACE]: about an icon's width, on the app's spacing scale. */
+private val SPACE_WIDTH = DashSpace.Xl
+private const val STRETCH_ID = "bar_stretch"
+
+/**
+ * Where each of the bar's pieces starts, for as many as fit: [widths] in
+ * order, [stretch] marking the [BarItem.STRETCH]es (measured empty). The
+ * first piece that doesn't fit ends the bar, as before. In [room]: the
+ * stretches split what is left evenly, the odd pixels to the first ones; with
+ * none, the lot is centred, like the Mistral cluster in the middle of its bar.
+ * Unbounded ([room] null): packed from the left, the stretches empty.
+ */
+internal fun barPositions(widths: List<Int>, stretch: List<Boolean>, room: Int?): List<Int> {
+    var left = room ?: Int.MAX_VALUE
+    var fit = 0
+    for (w in widths) {
+        if (w > left) break
+        left -= w
+        fit++
+    }
+    val stretches = (0 until fit).count { stretch[it] }
+    val extra = if (room == null) 0 else left
+    var x = if (stretches == 0) extra / 2 else 0
+    var seen = 0
+    return (0 until fit).map { i ->
+        val at = x
+        x += widths[i]
+        if (stretch[i]) {
+            x += extra / stretches + if (seen < extra % stretches) 1 else 0
+            seen++
+        }
+        at
     }
 }
 
@@ -325,6 +372,8 @@ private fun BarReadout(item: BarItem, m: TopBarModel) {
         BarItem.PHONE -> PhonePill()
         BarItem.OBD -> ObdDot(m.obdConnection, m.onConnectObd)
         BarItem.OUTSIDE -> ValueReadout(item, rememberOutsideTempC()?.let { units.tempTight(it) } ?: "–")
+        // Empty room, drawn by BarReadouts itself.
+        BarItem.SPACE, BarItem.STRETCH -> Unit
     }
 }
 
@@ -490,12 +539,14 @@ internal fun BarItemsSetting() {
     )
     SwitchHint(stringResource(look.hint))
     Spacer(Modifier.height(8.dp))
-    // Chosen ones first, in their order, then the rest.
-    val all = list + BarItem.entries.filter { it !in list }
+    // Chosen ones first, in their order, then the rest. The spacers are
+    // always among the rest as well: each tap there adds one more.
+    val all = list + BarItem.entries.filter { it !in list || it.spacer }
     all.forEachIndexed { i, item ->
-        val on = item in list
+        val on = i < list.size
         val tap = rememberTapFeedback()
-        // The whole row is the switch: a tap anywhere on the name puts it in the bar or takes it out.
+        // The whole row is the switch: a tap anywhere on the name puts it in the bar or takes it out
+        // (this one: a spacer that is in more than once leaves only here).
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -503,7 +554,7 @@ internal fun BarItemsSetting() {
                 .heightIn(min = DashSize.Touch)
                 .clip(DashShape.Medium)
                 .background(if (on) DashColors.Accent.copy(alpha = 0.12f) else Color.Transparent)
-                .clickable(role = Role.Switch) { tap(); BarItems.set(if (on) list - item else list + item) }
+                .clickable(role = Role.Switch) { tap(); BarItems.set(if (on) list.filterIndexed { j, _ -> j != i } else list + item) }
                 .semantics { selected = on }
                 .padding(start = 14.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -515,6 +566,9 @@ internal fun BarItemsSetting() {
                 fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                 style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis
             )
+            if (!on && item.spacer) {
+                Icon(Icons.Filled.Add, contentDescription = null, tint = DashColors.Muted, modifier = Modifier.padding(end = 14.dp).size(22.dp))
+            }
             if (on) {
                 IconButton(onClick = { BarItems.set(list.moved(i, -1)) }, enabled = i > 0) {
                     Icon(Icons.Filled.KeyboardArrowUp, contentDescription = stringResource(R.string.bar_items_left), tint = DashColors.TextSecondary)
