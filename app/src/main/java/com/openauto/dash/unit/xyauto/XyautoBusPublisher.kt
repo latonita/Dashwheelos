@@ -96,8 +96,7 @@ internal class XyautoBusPublisher(private val out: Publisher) {
         } else {
             tyres[pos] = Tyre(
                 kPa = kPa,
-                // The type has no "unknown"; the WCM's reply carries no temperature, so this is 0 on the WK.
-                celsius = r.celsius ?: 0,
+                celsius = r.celsius,   // null on the WK: the WCM's reply carries no temperature
                 sensorBatteryLow = r.sensorBatteryLow, leak = r.leak, noSignal = r.noSignal,
                 at = out.clock()
             )

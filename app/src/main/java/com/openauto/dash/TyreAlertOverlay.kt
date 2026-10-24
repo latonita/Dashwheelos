@@ -239,7 +239,7 @@ private fun TyreCell(pos: TyrePos, tyre: Tyre?, problem: TyreProblem?, unit: Pre
             tyre.noSignal -> stringResource(R.string.car_tyres_no_signal)
             problem != null -> stringResource(problem.labelRes)
             tyre.sensorBatteryLow -> stringResource(R.string.car_tyres_sensor_battery)
-            else -> LocalUnits.current.tempText(tyre.celsius)
+            else -> tyre.celsius?.let { LocalUnits.current.tempText(it) }
         }
         val noteColor = when {
             problem != null -> DashColors.Critical
