@@ -210,6 +210,7 @@ class XyautoBusPublisherTest {
         val map = read(K.TYRES)!!
         assertEquals(setOf(TyrePos.FRONT_LEFT, TyrePos.REAR_RIGHT), map.keys)
         assertEquals(230, map[TyrePos.FRONT_LEFT]!!.kPa)
+        assertNull(map[TyrePos.FRONT_LEFT]!!.celsius)   // the box sends none: unknown, not 0
         assertTrue(map[TyrePos.REAR_RIGHT]!!.leak)
 
         apply(tyre(TyreReading.FRONT_LEFT, null))         // lost its pressure

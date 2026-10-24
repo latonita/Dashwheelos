@@ -36,7 +36,8 @@ enum class TyrePos { FRONT_LEFT, FRONT_RIGHT, REAR_LEFT, REAR_RIGHT, SPARE }
 
 data class Tyre(
     val kPa: Int,
-    val celsius: Int,
+    /** Null when the sensor gives none (the XYAuto canbox reports pressure only): unknown, not 0. */
+    val celsius: Int?,
     val sensorBatteryLow: Boolean,
     val leak: Boolean,
     val noSignal: Boolean,
@@ -189,8 +190,8 @@ internal fun tyreProblem(t: Tyre, before: TyreProblem? = null, lowKpa: Int = TYR
     before == TyreProblem.LOW && t.kPa in 0 until lowKpa + TYRE_CLEAR_KPA -> TyreProblem.LOW
     t.kPa >= TYRE_HIGH_KPA -> TyreProblem.HIGH
     before == TyreProblem.HIGH && t.kPa > TYRE_HIGH_KPA - TYRE_CLEAR_KPA -> TyreProblem.HIGH
-    t.celsius >= TYRE_HOT_C -> TyreProblem.HOT
-    before == TyreProblem.HOT && t.celsius > TYRE_HOT_C - TYRE_CLEAR_C -> TyreProblem.HOT
+    t.celsius != null && t.celsius >= TYRE_HOT_C -> TyreProblem.HOT
+    before == TyreProblem.HOT && t.celsius != null && t.celsius > TYRE_HOT_C - TYRE_CLEAR_C -> TyreProblem.HOT
     else -> null
 }
 

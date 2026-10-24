@@ -9,7 +9,7 @@ import java.util.Locale
 /** The TPMS app's tyres, as Dashwheel reads and judges them. */
 class TyresTest {
 
-    private fun tyre(kPa: Int, celsius: Int = 25, leak: Boolean = false, noSignal: Boolean = false) =
+    private fun tyre(kPa: Int, celsius: Int? = 25, leak: Boolean = false, noSignal: Boolean = false) =
         Tyre(kPa, celsius, sensorBatteryLow = false, leak = leak, noSignal = noSignal, at = 0)
 
     @Test
@@ -47,6 +47,13 @@ class TyresTest {
         // Hot the same way.
         assertEquals(TyreProblem.HOT, tyreProblem(tyre(230, celsius = 73), TyreProblem.HOT))
         assertNull(tyreProblem(tyre(230, celsius = 70), TyreProblem.HOT))
+    }
+
+    @Test
+    fun anUnknownTemperatureIsNeverHot() {
+        assertNull(tyreProblem(tyre(230, celsius = null)))
+        assertNull(tyreProblem(tyre(230, celsius = null), TyreProblem.HOT))
+        assertEquals(TyreProblem.LOW, tyreProblem(tyre(170, celsius = null)))
         // Without a problem before, 181 kPa is fine.
         assertNull(tyreProblem(tyre(181)))
     }
