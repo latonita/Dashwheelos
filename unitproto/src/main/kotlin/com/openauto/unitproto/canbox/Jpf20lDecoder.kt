@@ -8,7 +8,8 @@ import com.openauto.unitproto.canbox.CanBytes.u8
 
 /**
  * The rebuilt JPF2 box (firmware H1N4JPF20L): the stock JPF2 stream, which it
- * keeps sending, plus a custom telemetry block in `0xB0`-`0xBD`.
+ * keeps sending, plus a custom telemetry block in `0xB0`-`0xBD`
+ * (`0xBC` FLOW, the fuel flow, from firmware H1N4JPF20L-241026; older builds never send it).
  *
  * The block sits there on purpose. A custom firmware is built on top of the
  * vendor's, which keeps talking: JPF2 alone already uses `0x21`-`0x24`,
@@ -69,6 +70,12 @@ class Jpf20lDecoder : HiworldJpf2Decoder() {
             // Magnetic, and NOT a sign of life: the car's compass keeps
             // reporting after key-off. Ignition is 0xB2 bit 0, never this.
             Jpf20lCmd.COMPASS -> listOfNotNull(Jpf20lSignals.compass(p)?.let { CanboxValue.Compass(it) })
+            // No validity bit in 0xB0 (the mask is full): 0xFFFF IS the withdrawal, and the box turns a silent bus
+            // into 0xFFFF within about a second. So a good frame is a reading (0.0 included: an overrun fuel cut)
+            // and an absent or out-of-range one is an explicit null, never a dropped frame that would leave the
+            // last flow on the gauge. A payload too short to read says nothing at all.
+            Jpf20lCmd.FLOW -> if (u16(p, Jpf20lSignals.OFF_FLOW) == null) emptyList()
+            else listOf(CanboxValue.FuelFlowLph(Jpf20lSignals.fuelFlowLph(p)))
             else -> emptyList()
         }
     }
@@ -140,17 +147,23 @@ object Jpf20lCmd {
      * kept across power cycles, which the box does not keep.
      */
     const val ODOMETER = 0xBB
+    /**
+     * Fuel flow, u16 big-endian in 0.1 L/h: the box's own 1 s time-weighted average of the car's injection rate.
+     * 0xFFFF is "absent" and the ONLY absent signal (no validity bit); 0 is a real reading. Added by firmware
+     * H1N4JPF20L-241026; older builds never send it.
+     */
+    const val FLOW = 0xBC
     /** The car's compass: the 8-way sector it shows, and the magnetic heading to 2 degrees. */
     const val COMPASS = 0xBD
 
     /** Every command of the block [Jpf20lDecoder] has a decoder for; always inside `0xB0`-`0xBF`. */
-    val DECODED = setOf(HEARTBEAT, IGNITION, DRIVETRAIN, ENGINE, CLIMATE, BODY, TYRE, FUEL, ODOMETER, COMPASS)
+    val DECODED = setOf(HEARTBEAT, IGNITION, DRIVETRAIN, ENGINE, CLIMATE, BODY, TYRE, FUEL, ODOMETER, FLOW, COMPASS)
 
     /** A short name for the command, for logs and the Signal Finder; null outside the block. */
     fun name(cmd: Int): String? = when (cmd) {
         HEARTBEAT -> "heartbeat"; VERSION -> "version"; IGNITION -> "ignition"
         DRIVETRAIN -> "drivetrain"; ENGINE -> "engine"; CLIMATE -> "climate"; BODY -> "body"; TYRE -> "tyre"
-        FUEL -> "fuel"; ODOMETER -> "odometer"; COMPASS -> "compass"
+        FUEL -> "fuel"; ODOMETER -> "odometer"; FLOW -> "flow"; COMPASS -> "compass"
         KEY -> "key"
         else -> null
     }
@@ -182,6 +195,7 @@ object Jpf20lCmd {
  * 0xB8 FUEL        [0..1] u16  tank       0.1 L; FFFF = not available
  *                  [2..3] u16  range      km; FFFF = not available
  * 0xBB ODOMETER    [0..2] u24  odometer   0.1 km; FFFFFF = not available
+ * 0xBC FLOW        [0..1] u16  fuel flow  0.1 L/h, 1 s average; FFFF = not available (no validity bit)
  * 0xBD COMPASS     [0]    u8   sector     0 N .. 7 NW; FF = not available
  *                  [1..2] u16  heading    magnetic degrees, 0..358 in 2s; FFFF = not available
  * ```
@@ -218,6 +232,13 @@ object Jpf20lSignals {
     const val OFF_ODOMETER = 0
     /** All-ones: the car has not said, or has stopped saying. Never 1 677 721.5 km. */
     const val ODOMETER_NOT_AVAILABLE = 0xFFFFFF
+
+    /** [Jpf20lCmd.FLOW]: tenths of a litre per hour. */
+    const val OFF_FLOW = 0
+    /** All-ones: the box has no flow (boot, silent bus). Never 6553.5 L/h. */
+    const val FLOW_NOT_AVAILABLE = 0xFFFF
+    /** The largest reading the box's divisor can produce is 409.6 L/h; no engine passes this. */
+    const val MAX_FLOW_LPH = 500.0
 
     /** [Jpf20lCmd.COMPASS]: the car's sector byte, then the heading in whole degrees. */
     const val OFF_COMPASS_SECTOR = 0
@@ -360,6 +381,16 @@ object Jpf20lSignals {
         val heading = u16(payload, OFF_COMPASS_HEADING)?.takeIf { it in 0..COMPASS_HEADING_MAX } ?: return null
         return CompassReading(sector, heading)
     }
+
+    /**
+     * 0xBC: the fuel flow in L/h, to a tenth, or null for 0xFFFF, an out-of-range value or a short payload.
+     * 0 is a reading (fuel cut on overrun), published as 0.0 and never withdrawn.
+     */
+    fun fuelFlowLph(payload: ByteArray?): Double? =
+        u16(payload, OFF_FLOW)
+            ?.takeIf { it != FLOW_NOT_AVAILABLE }
+            ?.let { it / 10.0 }
+            ?.takeIf { it in 0.0..MAX_FLOW_LPH }
 
     /** 0xB6: which doors and lids are open, or null for a payload too short. */
     fun doors(payload: ByteArray?): DoorBits? {

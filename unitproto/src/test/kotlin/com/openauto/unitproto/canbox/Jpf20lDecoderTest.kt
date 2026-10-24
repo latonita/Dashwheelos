@@ -142,7 +142,7 @@ class Jpf20lDecoderTest {
         // The block exists so the box's own commands keep their meaning.
         assertTrue(Jpf20lCmd.DECODED.all { it in 0xB0..0xBF })
         assertEquals("fuel", Jpf20lCmd.name(Jpf20lCmd.FUEL))
-        assertEquals(setOf(0xB0, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xBB, 0xBD), Jpf20lCmd.DECODED)
+        assertEquals(setOf(0xB0, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xBB, 0xBC, 0xBD), Jpf20lCmd.DECODED)
         // Stock commands are decoded too, and deliberately kept out of DECODED
         // so the "our block" invariant above stays true.
         assertEquals(setOf(0x12, 0x72, 0x32, 0xF0), HiworldJpf2Cmd.DECODED)
@@ -467,6 +467,39 @@ class Jpf20lDecoderTest {
         assertEquals(listOf(CanboxValue.Compass(CompassReading(6, 266))), decode(Jpf20lCmd.COMPASS, 0x06, 0x01, 0x0A))
         assertTrue(decode(Jpf20lCmd.COMPASS, 0xFF, 0xFF, 0xFF).isEmpty())
         assertTrue(decode(0x7F, 0x01).isEmpty())
+    }
+
+    @Test
+    fun fuelFlow_specVectors() {
+        // CUSTOM-TX-SPEC 10.6
+        assertEquals(listOf(CanboxValue.FuelFlowLph(12.3)), decode(Jpf20lCmd.FLOW, 0x00, 0x7B))
+        assertEquals(listOf(CanboxValue.FuelFlowLph(6.0)), decode(Jpf20lCmd.FLOW, 0x00, 0x3C))
+        assertEquals(listOf(CanboxValue.FuelFlowLph(409.6)), decode(Jpf20lCmd.FLOW, 0x10, 0x00))
+        // Overrun fuel cut: a reading of 0.0, NOT a withdrawal.
+        assertEquals(listOf(CanboxValue.FuelFlowLph(0.0)), decode(Jpf20lCmd.FLOW, 0x00, 0x00))
+        // 0xFFFF is the only absent signal: an explicit withdrawal, not a dropped frame.
+        assertEquals(listOf(CanboxValue.FuelFlowLph(null)), decode(Jpf20lCmd.FLOW, 0xFF, 0xFF))
+        // Never 6553.4 L/h.
+        assertEquals(listOf(CanboxValue.FuelFlowLph(null)), decode(Jpf20lCmd.FLOW, 0xFF, 0xFE))
+        // Short payload: no opinion.
+        assertTrue(decode(Jpf20lCmd.FLOW, 0x00).isEmpty())
+        assertTrue(decode(Jpf20lCmd.FLOW).isEmpty())
+        assertEquals("flow", Jpf20lCmd.name(Jpf20lCmd.FLOW))
+    }
+
+    @Test
+    fun fuelFlowSignal_ranges() {
+        assertEquals(0.0, Jpf20lSignals.fuelFlowLph(byteArrayOf(0, 0))!!, 0.0)
+        assertEquals(12.3, Jpf20lSignals.fuelFlowLph(byteArrayOf(0x00, 0x7B))!!, 1e-9)
+        assertNull(Jpf20lSignals.fuelFlowLph(byteArrayOf(-1, -1)))
+        assertNull(Jpf20lSignals.fuelFlowLph(byteArrayOf(0x20, 0x00)))   // 819.2 L/h: not an engine
+        assertNull(Jpf20lSignals.fuelFlowLph(null))
+    }
+
+    @Test
+    fun fuelFlow_hasNoHeartbeatBit_soTheHeartbeatNeverTouchesIt() {
+        assertNull(Jpf20lSignals.heartbeatValid(byteArrayOf(0x01, 0x00), Jpf20lCmd.FLOW))
+        assertTrue(decode(Jpf20lCmd.HEARTBEAT, 0x01, 0x00).none { it is CanboxValue.FuelFlowLph })
     }
 
     @Test

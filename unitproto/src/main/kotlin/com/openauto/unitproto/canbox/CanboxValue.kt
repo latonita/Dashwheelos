@@ -38,6 +38,8 @@ sealed interface CanboxValue {
     data class Dimmer(val pct: Int?) : CanboxValue
     /** The selector lever; null when the box has no reading. */
     data class Gear(val position: GearPosition?) : CanboxValue
+    /** Fuel flow in L/h (the box's 1 s average); 0.0 is a reading, null the box's "absent". */
+    data class FuelFlowLph(val lph: Double?) : CanboxValue
     data class OdometerKm(val km: Double) : CanboxValue
     data class Compass(val reading: CompassReading?) : CanboxValue
 

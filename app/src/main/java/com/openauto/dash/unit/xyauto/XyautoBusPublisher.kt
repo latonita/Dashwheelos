@@ -2,6 +2,7 @@ package com.openauto.dash.unit.xyauto
 
 import com.openauto.dash.McuReader
 import com.openauto.dash.Tyre
+import com.openauto.dash.UnitBus
 import com.openauto.dash.TyrePos
 import com.openauto.dash.unitBusOutsideTemp
 import com.openauto.dash.unitBusRpm
@@ -47,6 +48,9 @@ internal class XyautoBusPublisher(private val out: Publisher) {
             is CanboxValue.FuelLevelPct -> out.put(K.FUEL_LEVEL, v.pct?.toDouble())
             is CanboxValue.FuelLitres -> out.put(K.FUEL_LITRES, v.litres)
             is CanboxValue.RangeKm -> out.put(K.RANGE, v.km?.toDouble())
+            // The box repeats an unchanged flow only about every 11.5 s, so the key's 5 s would drop a steady reading;
+            // the box withdraws it itself (0xFFFF) within about a second of the engine or bus stopping.
+            is CanboxValue.FuelFlowLph -> out.put(K.FUEL_FLOW, v.lph, ttlMs = UnitBus.FLOW_HOLD_MS)
             is CanboxValue.Doors -> out.put(
                 K.DOORS,
                 McuReader.DoorState(

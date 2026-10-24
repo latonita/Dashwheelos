@@ -120,6 +120,18 @@ class XyautoBusPublisherTest {
     }
 
     @Test
+    fun fuelFlow_zeroIsAReading_nullWithdraws_andASteadyValueOutlivesTheKeysFiveSeconds() {
+        apply(CanboxValue.FuelFlowLph(7.4))
+        assertEquals(7.4, read(K.FUEL_FLOW)!!, 0.0)
+        t += 12_000                                      // the box's keep-alive sweep is about 11.5 s
+        assertEquals(7.4, read(K.FUEL_FLOW)!!, 0.0)
+        apply(CanboxValue.FuelFlowLph(0.0))              // overrun fuel cut: zero, not blank
+        assertEquals(0.0, read(K.FUEL_FLOW)!!, 0.0)
+        apply(CanboxValue.FuelFlowLph(null))             // 0xFFFF: the engine or bus stopped
+        assertNull(read(K.FUEL_FLOW))
+    }
+
+    @Test
     fun odometerCompassAndVersion() {
         apply(CanboxValue.OdometerKm(123_456.7), CanboxValue.Compass(CompassReading(sector = 6, headingDeg = 266)), CanboxValue.Version("H1N4JPF20L-1"))
         assertEquals(123_456.7, read(K.ODOMETER)!!, 0.0)
