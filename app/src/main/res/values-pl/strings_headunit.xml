@@ -28,6 +28,7 @@
     <string name="unit_family_reglink">Reglink (MediaTek)</string>
     <string name="unit_family_allwinner">Allwinner</string>
     <string name="unit_family_nwd">Nowadays</string>
+    <string name="unit_family_xyauto">XYAuto (MediaTek 9320)</string>
     <string name="unit_family_generic">Zwykły Android</string>
     <string name="unit_cap_ignition">Zapłon</string>
     <string name="unit_cap_bus">Magistrala danych auta</string>
