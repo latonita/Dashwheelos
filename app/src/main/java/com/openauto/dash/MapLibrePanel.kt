@@ -6,6 +6,7 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.content.pm.PackageManager
+import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -209,11 +210,27 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     val hostView = LocalView.current
     val focusManager = LocalFocusManager.current
 
-    /** Panel away, keyboard with it, and the Android focus back on the map. */
-    fun closeSearch() {
+    // When the panel last opened (uptime ms): touches on the map in the first
+    // moments after are the tail of the magnifier tap or the layout settling,
+    // not the driver reaching for the map.
+    val searchOpenedAt = remember { longArrayOf(0L) }
+    val searchFocusRequester = remember { FocusRequester() }
+
+    /** The one way the panel opens. */
+    fun openSearch(reason: String) {
+        Log.d(SEARCH_TAG, "open ($reason) was=$searchOpen")
+        searchOpenedAt[0] = android.os.SystemClock.uptimeMillis()
+        searchOpen = true
+    }
+
+    /** The one way the panel closes: panel away, keyboard with it, the Android focus back on the map. */
+    fun closeSearch(reason: String) {
+        Log.d(SEARCH_TAG, "close ($reason) was=$searchOpen")
         searchOpen = false
         keyboard?.hide()
         focusManager.clearFocus(force = true)
+        mapView.isFocusable = true
+        mapView.isFocusableInTouchMode = true
         mapView.requestFocus()
     }
 
@@ -281,14 +298,14 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             loading = false
             routeTo(Point.fromLngLat(place.lng, place.lat))
             destinationName = place.name
-            closeSearch()
+            closeSearch("search result routed")
         }
     }
 
     /** A saved place or a last destination, tapped: its route, ready to start. */
     fun routeToPlace(place: Place) {
         clearRoute()
-        closeSearch()
+        closeSearch("saved place picked")
         val ll = LatLng(place.lat, place.lng)
         mapRef?.addMarker(MarkerOptions().position(ll))
         routeTo(Point.fromLngLat(place.lng, place.lat))
@@ -425,12 +442,27 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                 // focusable in touch mode, so the driver's touch lands where
                 // they aimed it. The same hand-off at startup stops the box
                 // from grabbing the cursor before anyone has asked to type.
-                fun dismissSearch() {
-                    if (!searchFocused.value && !searchOpen) return
-                    closeSearch()
+                // Only a real touch of the map counts, and only once the panel
+                // has been open a moment. A camera move the app makes itself
+                // (tracking each fix, the look-ahead padding re-applied when the
+                // keyboard resizes the window) is not the driver.
+                fun dismissSearch(why: String) {
+                    if (!searchOpen) return
+                    val age = android.os.SystemClock.uptimeMillis() - searchOpenedAt[0]
+                    if (age < SEARCH_GRACE_MS) {
+                        Log.d(SEARCH_TAG, "dismiss ignored ($why) age=${age}ms")
+                        return
+                    }
+                    closeSearch("map touch: $why")
                 }
-                map.addOnMapClickListener { dismissSearch(); false }
-                map.addOnCameraMoveStartedListener { dismissSearch() }
+                map.addOnMapClickListener { dismissSearch("click"); false }
+                map.addOnCameraMoveStartedListener { reason ->
+                    if (reason == MapboxMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        dismissSearch("gesture")
+                    } else if (searchOpen) {
+                        Log.d(SEARCH_TAG, "camera move ignored reason=$reason")
+                    }
+                }
                 // The map takes the focus first, so the keyboard does not open
                 // over the map the moment the dashboard appears.
                 mapView.requestFocus()
@@ -508,13 +540,39 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             val places by PlacesStore.places.collectAsState()
             LaunchedEffect(Unit) { PlacesStore.load(context) }
             // While guiding, the turn banner has the top of the map.
-            LaunchedEffect(guidance != null) { if (guidance != null && searchOpen) closeSearch() }
+            // Opened: the map stops being focusable, the box takes the cursor and
+            // the keyboard comes up (parked only). Keyed on the state, not on the
+            // animated content, so it runs once per opening.
+            LaunchedEffect(searchOpen) {
+                if (!searchOpen) return@LaunchedEffect
+                Log.d(SEARCH_TAG, "open effect moving=$moving")
+                mapView.isFocusable = false
+                mapView.isFocusableInTouchMode = false
+                if (mapView.hasFocus()) mapView.clearFocus()
+                if (moving) return@LaunchedEffect
+                delay(150) // the field is composed and laid out by now
+                val ok = runCatching { searchFocusRequester.requestFocus() }
+                Log.d(SEARCH_TAG, "requestFocus -> $ok")
+                delay(50)
+                Log.d(SEARCH_TAG, "keyboard.show()")
+                keyboard?.show()
+                delay(350)
+                // Fallback for a keyboard that was slow to bind.
+                if (searchOpen) {
+                    Log.d(SEARCH_TAG, "IMM showSoftInput fallback focused=${searchFocused.value}")
+                    runCatching {
+                        (hostView.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                            ?.showSoftInput(hostView, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }
+            }
+            LaunchedEffect(guidance != null) { if (guidance != null && searchOpen) closeSearch("guidance started") }
             if (guidance == null) Box(
                 modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
             ) {
                 if (!searchOpen) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MapButton(Icons.Filled.Search, stringResource(R.string.info_map_search)) { searchOpen = true }
+                        MapButton(Icons.Filled.Search, stringResource(R.string.info_map_search)) { openSearch("magnifier") }
                         // The route can be dropped without opening the search.
                         if (route != null) {
                             MapButton(Icons.Filled.Close, stringResource(R.string.info_map_clear_route), tint = DashColors.Muted) { clearRoute() }
@@ -526,14 +584,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
                     exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
                 ) {
-                    val focusRequester = remember { FocusRequester() }
-                    // Opened: the box takes the cursor and the keyboard comes up (parked only).
-                    LaunchedEffect(Unit) {
-                        if (moving) return@LaunchedEffect
-                        delay(80)
-                        runCatching { focusRequester.requestFocus() }
-                        raiseKeyboard(hostView, mapView, keyboard)
-                    }
                     Column(
                         modifier = Modifier.widthIn(max = 560.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -552,10 +602,10 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
-                            .focusRequester(focusRequester)
+                            .focusRequester(searchFocusRequester)
                             .onFocusChanged {
+                                Log.d(SEARCH_TAG, "field focus=${it.isFocused} open=$searchOpen")
                                 searchFocused.value = it.isFocused
-                                if (it.isFocused) scope.launch { raiseKeyboard(hostView, mapView, keyboard) }
                             }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyUp &&
@@ -588,7 +638,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.info_map_search), tint = AccentMark)
                         }
                     }
-                    IconButton(onClick = { closeSearch() }, modifier = Modifier.size(MapButtonSize)) {
+                    IconButton(onClick = { closeSearch("close button") }, modifier = Modifier.size(MapButtonSize)) {
                         Icon(Icons.Filled.Close, contentDescription = null, tint = DashColors.Muted)
                     }
                 }
@@ -851,29 +901,10 @@ private fun enableLocation(
     }
 }
 
-/**
- * Brings the soft keyboard up for the destination box.
- *
- * The map is a real View that takes the Android focus at startup and whenever
- * the keyboard is put away ([MapLibrePanel]'s dismissal). Compose's text field
- * then holds Compose focus only: the window's served view stays the map, which
- * has no input connection, so the keyboard is asked for and never comes. The
- * map lets go of the focus here and the dashboard's own view takes it, then the
- * keyboard is requested twice, through Compose and through the input method
- * manager, the second after the first had its chance (a head unit's keyboard can
- * be slow to bind).
- */
-private suspend fun raiseKeyboard(host: View, map: MapView, keyboard: SoftwareKeyboardController?) {
-    if (map.hasFocus()) map.clearFocus()
-    if (!host.isFocused) host.requestFocus()
-    delay(60)
-    keyboard?.show()
-    delay(300)
-    runCatching {
-        (host.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-            ?.showSoftInput(host, InputMethodManager.SHOW_IMPLICIT)
-    }
-}
+private const val SEARCH_TAG = "DashMapSearch"
+
+/** A map touch this soon after the search panel opened does not close it. */
+private const val SEARCH_GRACE_MS = 1_000L
 
 /** Seconds of free panning before the camera snaps back to the vehicle. */
 private const val TRACKING_RESUME_MS = 10_000L
