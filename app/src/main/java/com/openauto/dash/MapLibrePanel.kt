@@ -6,6 +6,8 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.content.pm.PackageManager
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
@@ -70,6 +72,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -349,6 +353,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     // The listener below is registered once; it reads the lock's latest state.
     val movingNow = rememberUpdatedState(moving)
     val keyboard = LocalSoftwareKeyboardController.current
+    val hostView = LocalView.current
     val focusManager = LocalFocusManager.current
     // Whether the destination box holds the cursor, so a touch of the map can
     // put it down again — and only then, so every other touch is left alone.
@@ -494,7 +499,10 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
-                            .onFocusChanged { searchFocused.value = it.isFocused }
+                            .onFocusChanged {
+                                searchFocused.value = it.isFocused
+                                if (it.isFocused) scope.launch { raiseKeyboard(hostView, mapView, keyboard) }
+                            }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyUp &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -737,6 +745,30 @@ private fun enableLocation(
             if (held) LocationFeed.release()
         }
         if (userMoved[map] != true) followVehicle(lc, mapView, wallpaper, userZooms[map])
+    }
+}
+
+/**
+ * Brings the soft keyboard up for the destination box.
+ *
+ * The map is a real View that takes the Android focus at startup and whenever
+ * the keyboard is put away ([MapLibrePanel]'s dismissal). Compose's text field
+ * then holds Compose focus only: the window's served view stays the map, which
+ * has no input connection, so the keyboard is asked for and never comes. The
+ * map lets go of the focus here and the dashboard's own view takes it, then the
+ * keyboard is requested twice, through Compose and through the input method
+ * manager, the second after the first had its chance (a head unit's keyboard can
+ * be slow to bind).
+ */
+private suspend fun raiseKeyboard(host: View, map: MapView, keyboard: SoftwareKeyboardController?) {
+    if (map.hasFocus()) map.clearFocus()
+    if (!host.isFocused) host.requestFocus()
+    delay(60)
+    keyboard?.show()
+    delay(300)
+    runCatching {
+        (host.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.showSoftInput(host, InputMethodManager.SHOW_IMPLICIT)
     }
 }
 
