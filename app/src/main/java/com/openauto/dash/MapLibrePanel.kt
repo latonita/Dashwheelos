@@ -10,6 +10,11 @@ import android.view.View
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,7 +35,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Navigation
@@ -69,7 +77,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -192,6 +203,19 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     var info by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    // The destination panel: a magnifier on the map until it is tapped.
+    var searchOpen by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val hostView = LocalView.current
+    val focusManager = LocalFocusManager.current
+
+    /** Panel away, keyboard with it, and the Android focus back on the map. */
+    fun closeSearch() {
+        searchOpen = false
+        keyboard?.hide()
+        focusManager.clearFocus(force = true)
+        mapView.requestFocus()
+    }
 
     fun clearRoute() {
         route = null; destination = null; destinationName = null; info = null; error = null
@@ -257,12 +281,14 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             loading = false
             routeTo(Point.fromLngLat(place.lng, place.lat))
             destinationName = place.name
+            closeSearch()
         }
     }
 
     /** A saved place or a last destination, tapped: its route, ready to start. */
     fun routeToPlace(place: Place) {
         clearRoute()
+        closeSearch()
         val ll = LatLng(place.lat, place.lng)
         mapRef?.addMarker(MarkerOptions().position(ll))
         routeTo(Point.fromLngLat(place.lng, place.lat))
@@ -341,6 +367,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             // No MapLibre wordmark on the dashboard. The attribution (i)
             // stays: OpenStreetMap's licence and the tile providers ask for it.
             map.uiSettings.isLogoEnabled = false
+            // The compass keeps to the top right corner: the search is a magnifier
+            // at the top left now. Margins are pixels.
+            map.uiSettings.isCompassEnabled = !wallpaper
+            map.uiSettings.compassGravity = android.view.Gravity.TOP or android.view.Gravity.END
+            val d = context.resources.displayMetrics.density
+            map.uiSettings.setCompassMargins(0, (12 * d).toInt(), (12 * d).toInt(), 0)
             // Under the dashboard nothing reaches the map by touch anyway.
             if (wallpaper) map.uiSettings.setAllGesturesEnabled(false)
             mapRef = map
@@ -352,9 +384,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     val lightMap = DashColors.Light
     // The listener below is registered once; it reads the lock's latest state.
     val movingNow = rememberUpdatedState(moving)
-    val keyboard = LocalSoftwareKeyboardController.current
-    val hostView = LocalView.current
-    val focusManager = LocalFocusManager.current
     // Whether the destination box holds the cursor, so a touch of the map can
     // put it down again — and only then, so every other touch is left alone.
     val searchFocused = remember { mutableStateOf(false) }
@@ -397,10 +426,8 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                 // they aimed it. The same hand-off at startup stops the box
                 // from grabbing the cursor before anyone has asked to type.
                 fun dismissSearch() {
-                    if (!searchFocused.value) return
-                    keyboard?.hide()
-                    focusManager.clearFocus(force = true)
-                    mapView.requestFocus()
+                    if (!searchFocused.value && !searchOpen) return
+                    closeSearch()
                 }
                 map.addOnMapClickListener { dismissSearch(); false }
                 map.addOnCameraMoveStartedListener { dismissSearch() }
@@ -481,10 +508,36 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             val places by PlacesStore.places.collectAsState()
             LaunchedEffect(Unit) { PlacesStore.load(context) }
             // While guiding, the turn banner has the top of the map.
-            if (guidance == null) Column(
-                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            LaunchedEffect(guidance != null) { if (guidance != null && searchOpen) closeSearch() }
+            if (guidance == null) Box(
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
             ) {
+                if (!searchOpen) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        MapButton(Icons.Filled.Search, stringResource(R.string.info_map_search)) { searchOpen = true }
+                        // The route can be dropped without opening the search.
+                        if (route != null) {
+                            MapButton(Icons.Filled.Close, stringResource(R.string.info_map_clear_route), tint = DashColors.Muted) { clearRoute() }
+                        }
+                    }
+                }
+                AnimatedVisibility(
+                    visible = searchOpen,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+                ) {
+                    val focusRequester = remember { FocusRequester() }
+                    // Opened: the box takes the cursor and the keyboard comes up (parked only).
+                    LaunchedEffect(Unit) {
+                        if (moving) return@LaunchedEffect
+                        delay(80)
+                        runCatching { focusRequester.requestFocus() }
+                        raiseKeyboard(hostView, mapView, keyboard)
+                    }
+                    Column(
+                        modifier = Modifier.widthIn(max = 560.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
             Surface(
                 color = OverlayBg,
                 shape = DashShape.Medium,
@@ -499,6 +552,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
+                            .focusRequester(focusRequester)
                             .onFocusChanged {
                                 searchFocused.value = it.isFocused
                                 if (it.isFocused) scope.launch { raiseKeyboard(hostView, mapView, keyboard) }
@@ -530,19 +584,56 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     if (loading) {
                         CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Accent, strokeWidth = 3.dp)
                     } else {
-                        IconButton(onClick = { submitSearch() }) {
+                        IconButton(onClick = { submitSearch() }, modifier = Modifier.size(MapButtonSize)) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.info_map_search), tint = AccentMark)
                         }
                     }
-                    if (route != null) {
-                        IconButton(onClick = { clearRoute() }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.info_map_clear_route), tint = DashColors.Muted)
-                        }
+                    IconButton(onClick = { closeSearch() }, modifier = Modifier.size(MapButtonSize)) {
+                        Icon(Icons.Filled.Close, contentDescription = null, tint = DashColors.Muted)
                     }
                 }
             }
             // Out of the way once a destination is set: the route is what matters then.
             if (destination == null) PlaceChips(places, onPick = { routeToPlace(it) })
+                    }
+                }
+            }
+
+            // Zoom and back to the car: always, moving or not (the drive lock is for typing).
+            val zoomState = remember { doubleArrayOf(0.0, 0.0) }
+            fun zoomBy(delta: Int) {
+                val map = mapRef ?: return
+                val now = System.currentTimeMillis()
+                // Quick taps add up from the zoom being animated to, not the one the camera has reached.
+                val base = if (now - zoomState[1].toLong() < 600) zoomState[0] else map.cameraPosition.zoom
+                val z = (base + delta).coerceIn(map.minZoomLevel, map.maxZoomLevel)
+                zoomState[0] = z; zoomState[1] = now.toDouble()
+                userZooms[map] = z
+                val lc = runCatching { map.locationComponent }.getOrNull()
+                if (lc != null && lc.isLocationComponentActivated && lc.cameraMode != CameraMode.NONE) {
+                    // Through the component: a plain zoom would drop tracking, and the
+                    // resume ten seconds on would snap back to the old zoom.
+                    runCatching { lc.zoomWhileTracking(z, 300L) }
+                } else {
+                    map.animateCamera(CameraUpdateFactory.zoomTo(z), 300)
+                }
+            }
+            fun recenter() {
+                val map = mapRef ?: return
+                val lc = runCatching { map.locationComponent }.getOrNull() ?: return
+                if (!lc.isLocationComponentActivated) return
+                val fix = LocationFeed.location.value ?: runCatching { lc.lastKnownLocation }.getOrNull()
+                if (fix == null) return
+                userZooms.remove(map); userMoved.remove(map)
+                followVehicle(lc, mapView, wallpaper = false, zoom = null)
+            }
+            Column(
+                modifier = Modifier.align(Alignment.CenterEnd).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MapButton(Icons.Filled.Add, stringResource(R.string.info_map_zoom_in)) { zoomBy(1) }
+                MapButton(Icons.Filled.Remove, stringResource(R.string.info_map_zoom_out)) { zoomBy(-1) }
+                MapButton(Icons.Filled.MyLocation, stringResource(R.string.info_map_recenter)) { recenter() }
             }
 
             val guiding = guidance
@@ -589,6 +680,18 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     }
                 }
             }
+        }
+    }
+}
+
+private val MapButtonSize = 64.dp
+
+/** A square touch target over the map, in the overlay's colours. */
+@Composable
+private fun MapButton(icon: ImageVector, description: String, tint: Color = AccentMark, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = OverlayBg, shape = DashShape.Medium, modifier = Modifier.size(MapButtonSize)) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(32.dp))
         }
     }
 }

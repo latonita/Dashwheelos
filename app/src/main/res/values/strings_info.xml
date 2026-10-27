@@ -157,6 +157,9 @@
     <string name="info_map_where_to">Where to?</string>
     <string name="info_map_search">Search</string>
     <string name="info_map_clear_route">Clear route</string>
+    <string name="info_map_zoom_in">Zoom in</string>
+    <string name="info_map_zoom_out">Zoom out</string>
+    <string name="info_map_recenter">Back to my location</string>
     <string name="info_map_ready">Ready to navigate</string>
     <string name="info_map_start">Start</string>
     <string name="info_map_gps_not_ready">GPS not ready: Start still opens Google Maps</string>
