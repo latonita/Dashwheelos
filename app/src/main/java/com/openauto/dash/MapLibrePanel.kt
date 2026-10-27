@@ -81,6 +81,8 @@ import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -101,10 +103,6 @@ import com.mapbox.mapboxsdk.maps.MapboxMap
 import com.mapbox.mapboxsdk.maps.MapboxMapOptions
 import com.mapbox.mapboxsdk.maps.MapView
 import com.mapbox.mapboxsdk.maps.Style
-import com.mapbox.mapboxsdk.style.expressions.Expression
-import com.mapbox.mapboxsdk.style.layers.FillExtrusionLayer
-import com.mapbox.mapboxsdk.style.layers.PropertyFactory
-import com.mapbox.mapboxsdk.style.sources.VectorSource
 import org.maplibre.geojson.Point
 import org.maplibre.navigation.core.models.DirectionsResponse
 import org.maplibre.navigation.core.models.DirectionsRoute
@@ -175,7 +173,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     // Paused or stopped it is not: a tile map put to sleep came back black.
     val pageActive = LocalPageActive.current
     LaunchedEffect(pageActive) {
-        mapView.setMaximumFps(if (!pageActive) HIDDEN_FPS else if (wallpaper) WALLPAPER_FPS else Int.MAX_VALUE)
+        mapView.setMaximumFps(if (!pageActive) HIDDEN_FPS else if (wallpaper) WALLPAPER_FPS else TILE_FPS)
         if (pageActive) mapRef?.triggerRepaint()
     }
 
@@ -280,7 +278,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         // A route the guidance refuses goes to the navigation app instead.
         if (!inOtherApp && shown != null && hasLocationPerm(context) && InAppNav.start(context, shown, dest, name)) {
             // Back to the car straight away, not after the preview's pause.
-            mapRef?.let { followVehicle(it.locationComponent, null, userZooms[it]) }
+            mapRef?.let { followVehicle(it.locationComponent, mapView, wallpaper, userZooms[it]) }
         } else if (!NavHandoff.start(context, lat, lng, name.orEmpty())) {
             error = context.getString(R.string.places_no_nav_app)
             return
@@ -361,7 +359,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(mapRef, styleUrl) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
-            add3dBuildings(style, lightMap)
             // The route's source and layers belong to the style, and switching
             // between the day and night styles builds a new one — so the line
             // has to be made again each time or it disappears with the old
@@ -461,7 +458,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(hasLocation, styleReady) {
         if (!hasLocation || !styleReady) return@LaunchedEffect
         val map = mapRef ?: return@LaunchedEffect
-        map.getStyle { style -> enableLocation(map, style, context, scope, if (wallpaper) mapView else null) }
+        map.getStyle { style -> enableLocation(map, style, context, scope, mapView, wallpaper) }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -647,8 +644,9 @@ private fun enableLocation(
     style: Style,
     context: Context,
     scope: kotlinx.coroutines.CoroutineScope,
-    /** Set when the map is a wallpaper: the camera sits lower and the car low on it. */
-    wallpaper: MapView? = null
+    mapView: MapView,
+    /** Set when the map is a wallpaper: the camera sits lower and the car lower on it. */
+    wallpaper: Boolean
 ) {
     if (!hasLocationPerm(context)) return
     val lc = map.locationComponent
@@ -668,6 +666,7 @@ private fun enableLocation(
             var byGesture = false
             map.addOnCameraMoveStartedListener { reason ->
                 byGesture = reason == MapboxMap.OnCameraMoveStartedListener.REASON_API_GESTURE
+                if (byGesture) userMoved[map] = true
             }
             map.addOnCameraIdleListener {
                 if (byGesture) userZooms[map] = map.cameraPosition.zoom
@@ -683,7 +682,7 @@ private fun enableLocation(
                     resume?.cancel()
                     resume = scope.launch {
                         delay(TRACKING_RESUME_MS)
-                        followVehicle(lc, wallpaper, userZooms[map])
+                        followVehicle(lc, mapView, wallpaper, userZooms[map])
                     }
                 }
 
@@ -692,25 +691,52 @@ private fun enableLocation(
                 }
             })
         }
+        // Opens where the car was last seen, not at the whole world, while
+        // tracking waits for a fix. A plain move: tracking is not on yet.
+        if (positioned.add(map) && userMoved[map] != true) {
+            val last = LocationFeed.location.value
+                ?: runCatching { lc.lastKnownLocation }.getOrNull()
+            if (last != null) {
+                runCatching {
+                    map.moveCamera(
+                        CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.Builder()
+                                .target(LatLng(last.latitude, last.longitude))
+                                .zoom(userZooms[map] ?: if (wallpaper) 17.0 else 16.5)
+                                .tilt(if (wallpaper) 60.0 else 45.0)
+                                .build()
+                        )
+                    )
+                }
+            }
+        }
+        // The map has no height until it is laid out, and changes with its size.
+        if (lookAheadHooked.add(mapView)) {
+            mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                if (bottom - top != oldBottom - oldTop) applyLookAhead(lc, mapView, wallpaper)
+            }
+        }
         lc.isLocationComponentEnabled = true
         // Directional puck; the camera follows position AND heading (map rotates
         // with the car) at a close zoom with pitch for the driving-nav look.
         lc.renderMode = RenderMode.COMPASS
-        followVehicle(lc, wallpaper, userZooms[map])
+        followVehicle(lc, mapView, wallpaper, userZooms[map])
     }
     // TRACKING_GPS only re-centres on a FRESH fix; with only a last-known
-    // location the camera stays at the default world view. Once any fix exists,
-    // fly to it *through* the component: a plain animateCamera here would
-    // count as a developer move and cancel tracking straight away.
+    // location the camera stays where it was put above. Wait, as long as it
+    // takes (a cold GPS in a car can take minutes), for the first fix, then
+    // engage tracking *through* the component: a plain animateCamera here
+    // would count as a developer move and cancel tracking straight away.
+    // A driver who has already moved the map is left alone; the resume timer
+    // brings the camera back to the car.
     scope.launch {
-        repeat(15) {
-            val loc = runCatching { lc.lastKnownLocation }.getOrNull()
-            if (loc != null) {
-                followVehicle(lc, wallpaper, userZooms[map])
-                return@launch
-            }
-            delay(800)
+        val held = LocationFeed.acquire(context.applicationContext)
+        try {
+            LocationFeed.location.filterNotNull().first()
+        } finally {
+            if (held) LocationFeed.release()
         }
+        if (userMoved[map] != true) followVehicle(lc, mapView, wallpaper, userZooms[map])
     }
 }
 
@@ -720,22 +746,48 @@ private const val TRACKING_RESUME_MS = 10_000L
 /** Zoom last set by a pinch on each map; tracking resumes at it instead of the default. */
 private val userZooms = java.util.WeakHashMap<MapboxMap, Double>()
 
+/** Maps whose driver has panned or zoomed them by hand: the first-fix jump leaves those alone. */
+private val userMoved = java.util.WeakHashMap<MapboxMap, Boolean>()
+
+/** Maps already put at the last known position, once. */
+private val positioned = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapboxMap, Boolean>())
+
+/** Map views that already watch their layout for [applyLookAhead]. */
+private val lookAheadHooked = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapView, Boolean>())
+
 /** Follow position and heading with the driving-nav zoom and pitch, keeping tracking on. */
-private fun followVehicle(lc: LocationComponent, wallpaper: MapView? = null, zoom: Double? = null) {
-    if (wallpaper == null) {
-        runCatching { lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 16.5, null, 45.0, null) }
-        return
-    }
-    // A wallpaper looks further ahead: steeper, a little closer, and the car
-    // pushed down to the lower part of the screen, between the panels.
+private fun followVehicle(lc: LocationComponent, view: MapView, wallpaper: Boolean, zoom: Double? = null) {
+    // A wallpaper looks further ahead: steeper, a little closer.
     runCatching {
-        lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 17.0, null, 60.0, null)
-        lc.paddingWhileTracking(doubleArrayOf(0.0, wallpaper.height * 0.42, 0.0, 0.0))
+        if (wallpaper) lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 17.0, null, 60.0, null)
+        else lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 16.5, null, 45.0, null)
     }
+    applyLookAhead(lc, view, wallpaper)
+}
+
+/**
+ * The car pushed down from the middle of the map, so more of the road ahead
+ * shows: top padding p moves it down by p/2. Skipped until the map has a height;
+ * the layout listener comes back here once it does.
+ */
+private fun applyLookAhead(lc: LocationComponent, view: MapView, wallpaper: Boolean) {
+    val h = view.height
+    if (h <= 0) return
+    val top = h * if (wallpaper) WALLPAPER_LOOK_AHEAD else TILE_LOOK_AHEAD
+    runCatching { lc.paddingWhileTracking(doubleArrayOf(0.0, top, 0.0, 0.0)) }
 }
 
 /** The wallpaper map's frame cap: smooth enough for a car moving under it, half the work of 60. */
 private const val WALLPAPER_FPS = 30
+
+/** The interactive map's frame cap: 30 is plenty for the head unit's Mali-450 and leaves the CPU/GPU to the rest of the dashboard. */
+private const val TILE_FPS = 30
+
+/** Top padding while tracking, as a share of the map's height: it moves the car down by half of it, to about a quarter from the bottom. */
+private const val TILE_LOOK_AHEAD = 0.5
+
+/** The same for the wallpaper map. */
+private const val WALLPAPER_LOOK_AHEAD = 0.42
 
 /**
  * A map's frame cap on a page off screen. The cap is a sleep after each frame
@@ -744,31 +796,6 @@ private const val WALLPAPER_FPS = 30
  * most, over by the time a sliding page shows much of the map.
  */
 private const val HIDDEN_FPS = 10
-
-/**
- * Adds extruded 3D buildings to the vector basemap, tinted for its [light] or dark
- * version. The building geometry lives in the style's vector source under the
- * OpenMapTiles `building` source-layer with `render_height` / `render_min_height`.
- * We detect the source id at runtime so this works regardless of what the style
- * names it, and skip silently if unavailable.
- */
-private fun add3dBuildings(style: Style, light: Boolean) {
-    runCatching {
-        val sourceId = style.sources.firstOrNull { it is VectorSource }?.id ?: return
-        if (style.getLayer("3d-buildings") != null) return
-        val layer = FillExtrusionLayer("3d-buildings", sourceId).apply {
-            sourceLayer = "building"
-            setProperties(
-                PropertyFactory.fillExtrusionColor(android.graphics.Color.parseColor(if (light) "#D5D8DE" else "#2B2F36")),
-                PropertyFactory.fillExtrusionHeight(Expression.get("render_height")),
-                PropertyFactory.fillExtrusionBase(Expression.get("render_min_height")),
-                PropertyFactory.fillExtrusionOpacity(0.85f)
-            )
-            setMinZoom(14f)
-        }
-        style.addLayer(layer)
-    }
-}
 
 private fun hasLocationPerm(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
