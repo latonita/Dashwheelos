@@ -110,15 +110,23 @@ object UnitLight {
 
     private suspend fun apply(context: Context) = write(context, current())
 
-    private suspend fun write(context: Context, level: Int) {
+    /**
+     * Writes the screen brightness by the settings permission when Dashwheel has it, else through the privileged
+     * shell; throws when there is no shell either.
+     */
+    internal suspend fun writeBrightness(context: Context, level: Int) {
         val cr = context.contentResolver
         val direct = Settings.System.canWrite(context) && runCatching {
             Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
             Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, level)
         }.getOrDefault(false)
         if (direct) return
+        DockShell.shell(context, "settings put system screen_brightness_mode 0; settings put system screen_brightness $level")
+    }
+
+    private suspend fun write(context: Context, level: Int) {
         try {
-            DockShell.shell(context, "settings put system screen_brightness_mode 0; settings put system screen_brightness $level")
+            writeBrightness(context, level)
         } catch (e: Exception) {
             Log.w(TAG, "can't set the screen light: ${e.message}")
             // No shell on this unit: Android's own "modify system settings" once, then it is written directly.

@@ -3,6 +3,7 @@ package com.openauto.dash
 import android.annotation.SuppressLint
 import android.content.Context
 import com.openauto.dash.vehicle.Computed
+import com.openauto.dash.unit.xyauto.XyautoDimmerLight
 import android.content.res.Configuration
 import android.content.Intent
 import android.os.Bundle
@@ -216,6 +217,8 @@ class MainActivity : ComponentActivity() {
                     { LearnedSignals.start(this) },
                     // The screen light following the headlights, and spoken camera warnings, when the driver turned them on.
                     { UnitLight.start(this) },
+                    // The XYAuto unit's own night light, from the car's dimmer (only where the canbox sends one).
+                    { XyautoDimmerLight.start(this) },
                     { SpeedCameras.startIfSpeaking(this) },
                     // Coolant and intake kept for twenty minutes, for the Engine temperatures graph.
                     { EngineTemps.start() },
