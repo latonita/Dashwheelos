@@ -880,8 +880,19 @@ private fun enableLocation(
         lc.isLocationComponentEnabled = true
         // Directional puck; the camera follows position AND heading (map rotates
         // with the car) at a close zoom with pitch for the driving-nav look.
-        lc.renderMode = RenderMode.COMPASS
         followVehicle(lc, mapView, wallpaper, userZooms[map])
+    }
+    // Stationary detection from the fixes: stopped, the map holds its bearing.
+    if (motionHooked.add(map)) {
+        scope.launch {
+            val det = StationaryDetector()
+            var prev: android.location.Location? = null
+            LocationFeed.location.filterNotNull().collect { fix ->
+                val kmh = StationaryDetector.speedKmh(fix, prev)
+                prev = fix
+                if (kmh != null) applyMotion(map, lc, mapView, wallpaper, det.update(System.currentTimeMillis(), kmh))
+            }
+        }
     }
     // TRACKING_GPS only re-centres on a FRESH fix; with only a last-known
     // location the camera stays where it was put above. Wait, as long as it
@@ -918,17 +929,46 @@ private val userMoved = java.util.WeakHashMap<MapboxMap, Boolean>()
 /** Maps already put at the last known position, once. */
 private val positioned = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapboxMap, Boolean>())
 
+/** Maps already watching the fixes for stationary / moving. */
+private val motionHooked = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapboxMap, Boolean>())
+
 /** Map views that already watch their layout for [applyLookAhead]. */
 private val lookAheadHooked = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapView, Boolean>())
 
-/** Follow position and heading with the driving-nav zoom and pitch, keeping tracking on. */
+/** Location components whose car stands still: the camera and puck then ignore GPS bearing. */
+private val stationaryLcs = java.util.Collections.newSetFromMap(java.util.WeakHashMap<LocationComponent, Boolean>())
+
+/**
+ * Follow position, and heading while moving, with the driving-nav zoom and
+ * pitch, keeping tracking on. Standing still the camera keeps its bearing
+ * (TRACKING) and the puck does not turn with GPS noise.
+ */
 private fun followVehicle(lc: LocationComponent, view: MapView, wallpaper: Boolean, zoom: Double? = null) {
+    val still = lc in stationaryLcs
     // A wallpaper looks further ahead: steeper, a little closer.
     runCatching {
-        if (wallpaper) lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 17.0, null, 60.0, null)
-        else lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 16.5, null, 45.0, null)
+        lc.renderMode = if (still) RenderMode.NORMAL else RenderMode.COMPASS
+        val mode = if (still) CameraMode.TRACKING else CameraMode.TRACKING_GPS
+        if (wallpaper) lc.setCameraMode(mode, 1000L, zoom ?: 17.0, null, 60.0, null)
+        else lc.setCameraMode(mode, 1000L, zoom ?: 16.5, null, 45.0, null)
     }
     applyLookAhead(lc, view, wallpaper)
+}
+
+/** The car stopped or set off: switch bearing-following and the puck, keeping zoom, tilt and padding. */
+private fun applyMotion(map: MapboxMap, lc: LocationComponent, view: MapView, wallpaper: Boolean, still: Boolean) {
+    if ((lc in stationaryLcs) == still) return
+    if (still) stationaryLcs.add(lc) else stationaryLcs.remove(lc)
+    Log.d("DashMapMotion", "stationary=$still wallpaper=$wallpaper cameraMode=${runCatching { lc.cameraMode }.getOrNull()}")
+    runCatching {
+        lc.renderMode = if (still) RenderMode.NORMAL else RenderMode.COMPASS
+        // Not tracking (the driver is panning): the 10 s resume picks the right mode up.
+        if (lc.cameraMode != CameraMode.NONE) {
+            val cam = map.cameraPosition
+            lc.setCameraMode(if (still) CameraMode.TRACKING else CameraMode.TRACKING_GPS, 600L, cam.zoom, null, cam.tilt, null)
+            applyLookAhead(lc, view, wallpaper)
+        }
+    }
 }
 
 /**
