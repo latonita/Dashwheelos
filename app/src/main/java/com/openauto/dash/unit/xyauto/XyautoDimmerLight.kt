@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -25,13 +25,26 @@ import kotlin.math.roundToInt
  */
 object XyautoDimmerLight {
     private const val TAG = "XyautoDimmerLight"
-    private const val MIN_PCT = 17.0
+    /** The WK dimmer's positions in percent, darkest first; 0 (lights off) reads as the darkest. */
+    private val STEPS = doubleArrayOf(17.0, 34.0, 51.0, 82.0, 100.0)
+    /** The darkest backlight level: the firmware's own floor. */
+    private const val MIN_LEVEL = 10.0
+    private const val MAX_LEVEL = 255.0
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var started = false
 
-    /** The backlight level (0..255) for the car's dimmer in percent; never below [MIN_PCT]. */
-    internal fun level(pct: Double): Int = (max(pct, MIN_PCT) * 255 / 100).roundToInt().coerceIn(0, 255)
+    /**
+     * The backlight level (10..255) for the car's dimmer in percent. The eye sees ratios, not differences, so the
+     * wheel's positions are spaced evenly on a log scale (each one about 2.25 times the last); a value between
+     * two positions falls between their levels.
+     */
+    internal fun level(pct: Double): Int {
+        val p = pct.coerceIn(STEPS.first(), STEPS.last())
+        val i = (1 until STEPS.size).first { p <= STEPS[it] }
+        val position = i - 1 + (p - STEPS[i - 1]) / (STEPS[i] - STEPS[i - 1])
+        return (MIN_LEVEL * (MAX_LEVEL / MIN_LEVEL).pow(position / (STEPS.size - 1))).roundToInt()
+    }
 
     fun start(context: Context) {
         if (started) return
