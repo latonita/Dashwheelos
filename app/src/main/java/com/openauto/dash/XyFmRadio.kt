@@ -187,7 +187,7 @@ internal object XyFmRadio : StockRadio {
     override fun tune(context: Context, station: RadioStation) {
         val fm = fmExtra(station.freq) ?: return
         val a = context.applicationContext
-        if (alive) a.sendBroadcast(Intent(ACTION_TUNE).putExtra(EXTRA_FM, fm)) else open(a, fm)
+        if (alive) a.sendBroadcast(command(ACTION_TUNE).putExtra(EXTRA_FM, fm)) else open(a, fm)
         paused = false
         lastFreqAt = SystemClock.elapsedRealtime()
         _playing.value = named(station.freq)
@@ -202,19 +202,25 @@ internal object XyFmRadio : StockRadio {
         val a = context.applicationContext
         if (!alive) return open(a, _playing.value?.freq?.let(::fmExtra))
         if (isPlaying()) {
-            a.sendBroadcast(Intent(ACTION_PAUSE))
+            a.sendBroadcast(command(ACTION_PAUSE))
             paused = true
         } else {
-            a.sendBroadcast(Intent(ACTION_PLAY))
+            a.sendBroadcast(command(ACTION_PLAY))
             paused = false
             lastFreqAt = SystemClock.elapsedRealtime()
         }
         tell()
     }
 
+    /**
+     * An order for the open radio only. The radio's manifest receiver also takes `xy.setfm.freq` and
+     * opens its screen over Dashwheel; the receiver its screen registers tunes in place.
+     */
+    private fun command(action: String) = Intent(action).addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY)
+
     private fun order(context: Context, action: String) {
         val a = context.applicationContext
-        if (alive) a.sendBroadcast(Intent(action)) else open(a, _playing.value?.freq?.let(::fmExtra))
+        if (alive) a.sendBroadcast(command(action)) else open(a, _playing.value?.freq?.let(::fmExtra))
     }
 
     /**
