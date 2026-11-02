@@ -86,6 +86,7 @@ class CarMediaController(private val context: Context) {
         // The head unit's own players (Bluetooth music, radio) tell what they play by broadcast.
         HeadUnitMedia.start(context)
         HeadUnitMedia.addListener(stockChanged)
+        followRadio()
         try {
             sessionManager.addOnActiveSessionsChangedListener(sessionsChangedListener, listenerComponent)
             bind(sessionManager.getActiveSessions(listenerComponent))
@@ -117,6 +118,7 @@ class CarMediaController(private val context: Context) {
     /** Stops observing and releases callbacks. */
     fun stop() {
         HeadUnitMedia.removeListener(stockChanged)
+        unfollowRadio()
         main.removeCallbacks(stockTick)
         // Or the next start finds "already shown" and never ticks again: the radio's tile then stood still.
         stockShown = null
@@ -135,11 +137,25 @@ class CarMediaController(private val context: Context) {
         selectActive()
     }
 
-    /** Picks the session that is currently playing, falling back to the first. */
+    /**
+     * Picks the session that is currently playing, falling back to the first. Where the unit's radio tells for
+     * itself ([StockRadio.judgesSource]) it takes part: a live radio beats idle and empty sessions ([pickSource]).
+     */
     private fun selectActive() {
-        activeController = boundControllers.firstOrNull {
-            it.playbackState?.state == PlaybackState.STATE_PLAYING
-        } ?: boundControllers.firstOrNull()
+        val r = judgingRadio()
+        radioPicked = false
+        if (r != null) {
+            val views = boundControllers.map { SessionView(it.packageName, it.playbackState?.state == PlaybackState.STATE_PLAYING) }
+            when (val pick = pickSource(views, r.running, r.hasAudioFocus())) {
+                is SourcePick.Session -> activeController = boundControllers[pick.index]
+                SourcePick.Radio -> { activeController = null; radioPicked = true }
+                SourcePick.None -> activeController = null
+            }
+        } else {
+            activeController = boundControllers.firstOrNull {
+                it.playbackState?.state == PlaybackState.STATE_PLAYING
+            } ?: boundControllers.firstOrNull()
+        }
         playIfPending()
         publish(activeController)
     }
@@ -250,14 +266,48 @@ class CarMediaController(private val context: Context) {
         }
     }
 
+    /** The unit's radio when it tells for itself whether it is the source (XYAuto); null on the others. */
+    private fun judgingRadio(): StockRadio? = UnitPlatform.adapter.radio?.takeIf { it.judgesSource }
+
+    /** One user of the unit's own radio for as long as the controller runs, where its state is not in [HeadUnitMedia]. */
+    private fun followRadio() {
+        val r = judgingRadio() ?: return
+        if (!radioHeld) { r.start(context); radioHeld = true }
+        r.addListener(stockChanged)
+    }
+
+    private fun unfollowRadio() {
+        val r = judgingRadio() ?: return
+        r.removeListener(stockChanged)
+        if (radioHeld) { r.stop(context); radioHeld = false }
+    }
+
+    private var radioHeld = false
+    /** [selectActive] chose the radio over the sessions. */
+    private var radioPicked = false
+
+    /** The unit's radio takes its own buttons; the head unit's other players ([HeadUnitMedia]) take theirs. */
+    private fun radioOf(pkg: String): StockRadio? = UnitPlatform.adapter.radio?.takeIf { it.judgesSource && it.packageName == pkg }
+
+    private fun stockPlayPause(pkg: String) = radioOf(pkg)?.playPause(context) ?: HeadUnitMedia.playPause(context, pkg)
+    private fun stockNext(pkg: String) = radioOf(pkg)?.next(context) ?: HeadUnitMedia.next(context, pkg)
+    private fun stockPrevious(pkg: String) = radioOf(pkg)?.previous(context) ?: HeadUnitMedia.previous(context, pkg)
+
+    /** What the unit's radio, if [pkg] is it, says it plays; else the head unit's other players ([HeadUnitMedia]). */
+    private fun stockState(pkg: String): MediaState? {
+        val r = UnitPlatform.adapter.radio
+        return if (r != null && pkg == r.packageName) r.mediaState() else HeadUnitMedia.state(pkg)
+    }
+
     private fun publishStock(controller: MediaController?): Boolean {
         val pkg = when {
+            radioPicked -> judgingRadio()?.packageName
             controller != null -> controller.packageName?.takeIf {
                 HeadUnitMedia.isStock(it) && controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).isNullOrBlank()
             }
             else -> HeadUnitMedia.source()?.takeIf(HeadUnitMedia::isStock)
         }
-        val state = pkg?.let(HeadUnitMedia::state)
+        val state = pkg?.let(::stockState)
         val was = stockShown
         stockShown = if (state != null) pkg else null
         if (stockShown != null && was == null) main.postDelayed(stockTick, STOCK_TICK_MS)
@@ -344,7 +394,7 @@ class CarMediaController(private val context: Context) {
      */
     fun playPause() {
         if (DemoMode.isOn) return DemoMode.playPause()
-        stockShown?.let { return HeadUnitMedia.playPause(context, it) }
+        stockShown?.let { return stockPlayPause(it) }
         val controls = activeController?.transportControls ?: return startLastPlayer()
         if (_mediaState.value.isPlaying) controls.pause() else controls.play()
     }
@@ -373,13 +423,13 @@ class CarMediaController(private val context: Context) {
 
     fun next() {
         if (DemoMode.isOn) return DemoMode.next()
-        stockShown?.let { return HeadUnitMedia.next(context, it) }
+        stockShown?.let { return stockNext(it) }
         activeController?.transportControls?.skipToNext()
     }
 
     fun previous() {
         if (DemoMode.isOn) return DemoMode.previous()
-        stockShown?.let { return HeadUnitMedia.previous(context, it) }
+        stockShown?.let { return stockPrevious(it) }
         activeController?.transportControls?.skipToPrevious()
     }
 
