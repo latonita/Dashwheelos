@@ -7,13 +7,13 @@ import org.junit.Test
 class XyautoDimmerLightTest {
     @Test
     fun theCarsSixStepsMapToBacklightLevels() {
-        val expected = mapOf(0.0 to 5, 17.0 to 5, 34.0 to 8, 51.0 to 20, 82.0 to 64, 100.0 to 255)
+        val expected = mapOf(0.0 to 255, 17.0 to 5, 34.0 to 8, 51.0 to 20, 82.0 to 64, 100.0 to 255)
         for ((pct, level) in expected) assertEquals("pct $pct", level, XyautoDimmerLight.level(pct))
     }
 
     @Test
     fun outOfRangeIsClamped() {
-        assertEquals(5, XyautoDimmerLight.level(-5.0))
+        assertEquals(255, XyautoDimmerLight.level(-5.0))
         assertEquals(255, XyautoDimmerLight.level(250.0))
     }
 

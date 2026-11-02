@@ -25,7 +25,7 @@ import kotlin.math.roundToInt
  */
 object XyautoDimmerLight {
     private const val TAG = "XyautoDimmerLight"
-    /** The WK dimmer's positions in percent, darkest first; 0 (lights off) reads as the darkest. */
+    /** The WK dimmer's positions in percent, darkest first; below them (0, the lights off) is daylight, full on. */
     private val STEPS = doubleArrayOf(17.0, 34.0, 51.0, 82.0, 100.0)
     /** The darkest backlight level, for night driving. */
     private const val MIN_LEVEL = 5.0
@@ -39,10 +39,12 @@ object XyautoDimmerLight {
     /**
      * The backlight level (5..255) for the car's dimmer in percent: 5 / 8 / 20 / 64 / 255 over the wheel's
      * positions. The eye sees ratios, not differences, so the positions sit on a log scale, bent by [CURVE] so all
-     * but the top one stay dim enough at night; a value between two positions falls between their levels.
+     * but the top one stay dim enough at night; a value between two positions falls between their levels. With the
+     * lights off the car sends 0, and the screen goes full on.
      */
     internal fun level(pct: Double): Int {
-        val p = pct.coerceIn(STEPS.first(), STEPS.last())
+        if (pct < STEPS.first()) return MAX_LEVEL.roundToInt()
+        val p = pct.coerceAtMost(STEPS.last())
         val i = (1 until STEPS.size).first { p <= STEPS[it] }
         val position = i - 1 + (p - STEPS[i - 1]) / (STEPS[i] - STEPS[i - 1])
         val t = (position / (STEPS.size - 1)).pow(CURVE)
