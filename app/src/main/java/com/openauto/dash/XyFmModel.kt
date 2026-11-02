@@ -2,7 +2,7 @@ package com.openauto.dash
 
 /*
  * The pure parts of the XYAuto FM radio ([XyFmRadio], package com.android.fmradio): what its broadcasts say, the
- * frequency string it takes back, the list of stations Dashwheel learns from them, and which source the media tile
+ * frequency string it takes back, the list of stations the driver saved, and which source the media tile
  * shows. No Android here, so all of it is unit-tested.
  */
 
@@ -94,78 +94,58 @@ internal fun pickSource(sessions: List<SessionView>, radioAlive: Boolean, radioF
     return if (sessions.isNotEmpty()) SourcePick.Session(0) else SourcePick.None
 }
 
-/**
- * One station the XYAuto radio was heard on: how often ([heard]) and when last ([at], any monotonic millis), and
- * [pin], the order it was pinned in (0 = not pinned). The radio keeps its own presets private, so this is the list
- * Dashwheel learns for itself.
- */
-internal data class FmEntry(val freq: Int, val name: String = "", val pin: Int = 0, val heard: Int = 1, val at: Long = 0L)
+/** One station the driver saved: [freq] in 10 kHz units, [name] empty when none is known. */
+internal data class FmEntry(val freq: Int, val name: String = "")
 
 /**
- * The learned stations. Pinned ones first, in the order they were pinned; then the ones heard most often (the latest
- * first among equals). Those not pinned are kept to [LEARNED_CAP]: the least heard, longest ago, go first.
+ * The stations the driver saved for the presets tile, in the order they were added (never reordered), at most
+ * [StockRadio.SHOWN] and without duplicates. Nothing is learned from what the radio tunes: only [add] puts a station
+ * in. The radio keeps its own presets private, so this is Dashwheel's own list.
  * Immutable: every change gives a new list, which [serialize]s to one line per station for the preferences.
  */
 internal class FmStations(val entries: List<FmEntry> = emptyList()) {
 
-    /** The radio was heard on [freq] at [now]; [name] when something told it. */
-    fun heard(freq: Int, now: Long, name: String = ""): FmStations {
-        if (!isFm(freq)) return this
-        val cleanName = clean(name)
-        val old = entries.firstOrNull { it.freq == freq }
-        val next = if (old == null) entries + FmEntry(freq, cleanName, 0, 1, now)
-        else entries.map { if (it === old) it.copy(heard = it.heard + 1, at = now, name = cleanName.ifEmpty { it.name }) else it }
-        return FmStations(trim(next, keep = freq))
-    }
+    fun contains(freq: Int): Boolean = entries.any { it.freq == freq }
 
-    /** Pins [freq] when it isn't (and there is room: [max] pins), else unpins it. */
-    fun togglePin(freq: Int, max: Int = StockRadio.SHOWN): FmStations {
-        val e = entries.firstOrNull { it.freq == freq } ?: return this
-        val pin = when {
-            e.pin > 0 -> 0
-            entries.count { it.pin > 0 } >= max -> return this
-            else -> (entries.maxOfOrNull { it.pin } ?: 0) + 1
-        }
-        return FmStations(entries.map { if (it === e) it.copy(pin = pin) else it })
-    }
+    /** Whether [freq] could be [add]ed: FM, not saved yet, and there is room. */
+    fun canAdd(freq: Int, max: Int = StockRadio.SHOWN): Boolean = isFm(freq) && !contains(freq) && entries.size < max
+
+    /** [freq] saved after the others; the same list when it can't be ([canAdd]). */
+    fun add(freq: Int, name: String = "", max: Int = StockRadio.SHOWN): FmStations =
+        if (canAdd(freq, max)) FmStations(entries + FmEntry(freq, clean(name))) else this
 
     fun remove(freq: Int): FmStations = FmStations(entries.filter { it.freq != freq })
 
-    /** The stations in the order shown, at most [n]. */
-    fun shown(n: Int = StockRadio.SHOWN): List<RadioStation> =
-        entries.sortedWith(compareBy<FmEntry> { if (it.pin > 0) 0 else 1 }.thenBy { it.pin }.thenByDescending { it.heard }.thenByDescending { it.at })
-            .take(n).map { RadioStation(it.freq, it.name, pinned = it.pin > 0) }
+    /** The stations in the order shown. */
+    fun shown(): List<RadioStation> = entries.map { RadioStation(it.freq, it.name) }
 
     fun nameOf(freq: Int): String = entries.firstOrNull { it.freq == freq }?.name.orEmpty()
 
-    fun serialize(): String = entries.joinToString("\n") { "${it.freq}\t${it.name}\t${it.pin}\t${it.heard}\t${it.at}" }
-
-    /** Drops the unpinned stations beyond the cap, never [keep] (the one just heard). */
-    private fun trim(list: List<FmEntry>, keep: Int): List<FmEntry> {
-        val loose = list.filter { it.pin == 0 && it.freq != keep }
-        val keepsRoom = if (list.any { it.freq == keep && it.pin == 0 }) 1 else 0
-        val spare = loose.size - (LEARNED_CAP - keepsRoom)
-        if (spare <= 0) return list
-        val drop = loose.sortedWith(compareBy<FmEntry> { it.heard }.thenBy { it.at }).take(spare).map { it.freq }.toSet()
-        return list.filter { it.freq !in drop }
-    }
+    fun serialize(): String = entries.joinToString("\n") { "${it.freq}\t${it.name}" }
 
     companion object {
-        /** Stations kept that are not pinned. */
-        const val LEARNED_CAP = 12
-
-        private val BLANKS = Regex("[\\t\\r\\n]")
+        private val BLANKS = Regex("[\t\r\n]")
 
         private fun clean(name: String) = name.replace(BLANKS, " ").trim()
 
-        /** The list [serialize]d, as far as it makes sense (a damaged line is dropped). */
-        fun parse(text: String?): FmStations = FmStations(
-            text.orEmpty().lineSequence().mapNotNull { line ->
+        /**
+         * The list [serialize]d, as far as it makes sense (a damaged line is dropped, so is anything beyond the cap).
+         * Also reads the older format, which learned every station heard ("freq, name, pin, heard, at" per line): only
+         * the pinned ones (the driver's own choice) are kept, in the order they were pinned.
+         */
+        fun parse(text: String?, max: Int = StockRadio.SHOWN): FmStations {
+            val pinned = ArrayList<Pair<Int, FmEntry>>()
+            val saved = ArrayList<FmEntry>()
+            for (line in text.orEmpty().lineSequence()) {
                 val p = line.split('\t')
-                if (p.size != 5) return@mapNotNull null
-                val freq = p[0].toIntOrNull()?.takeIf(::isFm) ?: return@mapNotNull null
-                FmEntry(freq, p[1], p[2].toIntOrNull()?.coerceAtLeast(0) ?: 0, p[3].toIntOrNull()?.coerceAtLeast(1) ?: 1, p[4].toLongOrNull() ?: 0L)
-            }.distinctBy { it.freq }.toList()
-        )
+                val freq = p[0].toIntOrNull()?.takeIf(::isFm) ?: continue
+                when (p.size) {
+                    2 -> saved += FmEntry(freq, clean(p[1]))
+                    5 -> p[2].toIntOrNull()?.takeIf { it > 0 }?.let { pinned += it to FmEntry(freq, clean(p[1])) }
+                }
+            }
+            val all = pinned.sortedBy { it.first }.map { it.second } + saved
+            return FmStations(all.distinctBy { it.freq }.take(max))
+        }
     }
 }

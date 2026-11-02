@@ -40,9 +40,7 @@
     <string name="widgets_radio_previous">Ankstesnė stotis</string>
     <string name="widgets_radio_none">Šioje magnetoloje nėra radijo</string>
     <string name="widgets_radio_empty">Dar nėra išsaugotų stočių: išsaugokite jas radijo programoje</string>
-    <string name="widgets_radio_empty_learned">Suderinkite stotis radijo programoje: jos atsiras čia</string>
-    <string name="widgets_radio_pin">Prisegti</string>
-    <string name="widgets_radio_unpin">Atsegti</string>
+    <string name="widgets_radio_empty_add">Palieskite +, kad išsaugotumėte grojančią stotį</string>
     <string name="widgets_radio_remove">Pašalinti</string>
     <string name="widgets_hw_home">Namai</string>
     <string name="widgets_hw_work">Darbas</string>

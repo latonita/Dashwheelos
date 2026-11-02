@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The XYAuto FM radio's pure parts: its broadcasts, the learned list, the media tile's labels and source choice. */
+/** The XYAuto FM radio's pure parts: its broadcasts, the saved list, the media tile's labels and source choice. */
 class XyFmModelTest {
 
     // --- freq_volue -------------------------------------------------------------
@@ -134,89 +134,98 @@ class XyFmModelTest {
         assertEquals(SourcePick.Radio, pickSource(emptyList(), radioAlive = true, radioFocus = false))
     }
 
-    // --- the learned list ---------------------------------------------------------------------
+    // --- the driver's list ---------------------------------------------------------------------
 
     @Test
-    fun learned_everyFrequencyHeardIsKept() {
-        val l = FmStations().heard(8820, 1).heard(9650, 2).heard(8820, 3)
-        assertEquals(listOf(8820, 9650), l.shown().map { it.freq }) // heard twice first
-        assertEquals(2, l.entries.first { it.freq == 8820 }.heard)
+    fun saved_addKeepsTheOrderTheyWereAddedIn() {
+        val l = FmStations().add(10_040, "C").add(8820).add(9650)
+        assertEquals(listOf(10_040, 8820, 9650), l.shown().map { it.freq })
+        assertEquals("C", l.nameOf(10_040))
     }
 
     @Test
-    fun learned_ignoresWhatIsNotFm() {
-        assertTrue(FmStations().heard(1008, 1).heard(0, 2).entries.isEmpty())
+    fun saved_noDuplicatesAndOnlyFm() {
+        val l = FmStations().add(8820).add(8820, "again").add(1008).add(0)
+        assertEquals(listOf(8820), l.entries.map { it.freq })
+        assertEquals("", l.nameOf(8820))
     }
 
     @Test
-    fun learned_isCappedAndTheLeastHeardGoFirst() {
+    fun saved_isCappedAtWhatTheTileShows() {
         var l = FmStations()
-        // Station 8800 is heard again and again, so it must survive the flood of new ones.
-        l = l.heard(8800, 0).heard(8800, 1).heard(8800, 2)
-        for (i in 1 until 25) l = l.heard(8800 + i * 10, i.toLong() + 10)
-        assertEquals(FmStations.LEARNED_CAP, l.entries.size)
-        assertTrue(l.entries.any { it.freq == 8800 })
-        // The one just heard is never the one dropped.
-        assertTrue(l.entries.any { it.freq == 8800 + 24 * 10 })
+        for (i in 0 until StockRadio.SHOWN + 3) l = l.add(9000 + i * 10)
+        assertEquals(StockRadio.SHOWN, l.entries.size)
+        assertEquals(9000, l.entries.first().freq)
+        assertFalse(l.canAdd(10_000))
     }
 
     @Test
-    fun learned_pinnedComeFirstInPinOrder() {
-        var l = FmStations().heard(8820, 1).heard(9650, 2).heard(10_040, 3).heard(10_040, 4)
-        l = l.togglePin(9650).togglePin(8820)
-        assertEquals(listOf(9650, 8820, 10_040), l.shown().map { it.freq })
-        assertEquals(listOf(true, true, false), l.shown().map { it.pinned })
-        // Unpinned, it goes back among the heard ones.
-        l = l.togglePin(9650)
+    fun saved_removeLeavesTheOthersInOrderAndAllowsAddingAgain() {
+        var l = FmStations().add(8820).add(9650).add(10_040)
+        l = l.remove(9650)
+        assertEquals(listOf(8820, 10_040), l.shown().map { it.freq })
+        l = l.add(9650)
         assertEquals(listOf(8820, 10_040, 9650), l.shown().map { it.freq })
+        assertEquals(l.entries, l.remove(1234).entries)
     }
 
     @Test
-    fun learned_pinsSurviveTheCapAndTheCapDoesNotCountThem() {
-        var l = FmStations().heard(8820, 0).togglePin(8820)
-        for (i in 0 until 30) l = l.heard(9000 + i * 10, i.toLong() + 1)
-        assertTrue(l.entries.any { it.freq == 8820 && it.pin > 0 })
-        assertEquals(FmStations.LEARNED_CAP + 1, l.entries.size)
-        assertEquals(8820, l.shown().first().freq)
-    }
-
-    @Test
-    fun learned_pinsAreLimitedToWhatTheTileShows() {
-        var l = FmStations()
-        for (i in 0 until StockRadio.SHOWN + 1) l = l.heard(9000 + i * 10, i.toLong()).togglePin(9000 + i * 10)
-        assertEquals(StockRadio.SHOWN, l.entries.count { it.pin > 0 })
-    }
-
-    @Test
-    fun learned_removeForgetsItUntilHeardAgain() {
-        var l = FmStations().heard(8820, 1).heard(9650, 2).togglePin(8820)
-        l = l.remove(8820)
+    fun saved_nothingIsLearnedFromWhatTheRadioTunes() {
+        // The radio's broadcast only names what plays; the list has no way to take it in but add().
+        assertEquals(8820, parseFreqVolue(8820, "FM", "88.2 MHZ"))
+        val l = FmStations().add(9650)
         assertEquals(listOf(9650), l.shown().map { it.freq })
-        l = l.heard(8820, 3)
-        assertEquals(0, l.entries.first { it.freq == 8820 }.pin)
+        assertFalse(l.contains(8820))
+        assertTrue(l.canAdd(8820))
     }
 
     @Test
-    fun learned_nameIsKeptOnceGiven() {
-        val l = FmStations().heard(8820, 1, "Europa Plus").heard(8820, 2)
-        assertEquals("Europa Plus", l.nameOf(8820))
-        assertEquals("Europa Plus", l.shown().single().name)
-    }
-
-    @Test
-    fun learned_survivesTheRoundTripThroughThePreferences() {
-        val l = FmStations().heard(8820, 1, "A\tB\nC").heard(9650, 2).heard(9650, 3).togglePin(8820)
+    fun saved_survivesTheRoundTripThroughThePreferences() {
+        val l = FmStations().add(8820, "A\tB\nC").add(9650)
         val back = FmStations.parse(l.serialize())
         assertEquals(l.entries, back.entries)
         assertEquals("A B C", back.nameOf(8820))
     }
 
     @Test
-    fun learned_damagedPreferencesGiveWhatIsLeft() {
-        val text = "8820\tX\t1\t2\t5\nnot a line\n99999\t\t0\t1\t0\n9650\t\tx\t0\t?"
+    fun saved_oldFormatKeepsOnlyThePinnedOnesInPinOrder() {
+        // "freq, name, pin, heard, at": 9650 pinned 1st, 8820 pinned 2nd, the rest were learned.
+        val old = listOf(
+            "8820\tX\t2\t5\t7", "10040\t\t0\t9\t9", "9650\tY\t1\t1\t1", "9000\t\t0\t3\t3", "9650\tdup\t4\t1\t1"
+        ).joinToString("\n")
+        val l = FmStations.parse(old)
+        assertEquals(listOf(9650, 8820), l.entries.map { it.freq })
+        assertEquals("Y", l.nameOf(9650))
+    }
+
+    @Test
+    fun saved_oldFormatWithNothingPinnedIsEmpty() {
+        assertTrue(FmStations.parse("8820\t\t0\t4\t1\n9650\t\t0\t1\t2").entries.isEmpty())
+    }
+
+    @Test
+    fun saved_garbledPreferencesGiveWhatIsLeft() {
+        val text = "8820\tX\nnot a line\n99999\tZ\n9650\n\t\t\t\t\n10040\tW\t\t\n9650\tK"
         val l = FmStations.parse(text)
         assertEquals(listOf(8820, 9650), l.entries.map { it.freq })
         assertTrue(FmStations.parse(null).entries.isEmpty())
         assertTrue(FmStations.parse("").entries.isEmpty())
+        assertTrue(FmStations.parse("\u0000￿\t\t\t\t\t\t").entries.isEmpty())
+    }
+
+    @Test
+    fun saved_aLongStoredListIsCut() {
+        val text = (0 until 10).joinToString("\n") { "${9000 + it * 10}\t" }
+        assertEquals(StockRadio.SHOWN, FmStations.parse(text).entries.size)
+    }
+
+    @Test
+    fun plusCell_needsAPlayingStationNotSavedAndRoom() {
+        val a = RadioStation(8820, "")
+        assertFalse(canSaveStation(emptyList(), null))
+        assertTrue(canSaveStation(emptyList(), a))
+        assertFalse(canSaveStation(listOf(RadioStation(8820, "x")), a))
+        assertTrue(canSaveStation(List(StockRadio.SHOWN - 1) { RadioStation(9000 + it * 10, "") }, a))
+        assertFalse(canSaveStation(List(StockRadio.SHOWN) { RadioStation(9000 + it * 10, "") }, a))
     }
 }

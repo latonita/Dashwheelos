@@ -7,9 +7,8 @@ import java.util.Locale
 
 /**
  * A station: [freq] in the radio's 10 kHz units (9850 = 98.5 MHz); [name] empty when none is known.
- * [pinned] is the learned list's own flag (the XYAuto radio's presets tile); the QF radio's stations never set it.
  */
-data class RadioStation(val freq: Int, val name: String, val pinned: Boolean = false) {
+data class RadioStation(val freq: Int, val name: String) {
     val mhz: String get() = String.format(Locale.ROOT, "%.1f", freq / 100.0)
 }
 
@@ -68,9 +67,9 @@ interface StockRadio {
     fun previous(context: Context)
     fun playPause(context: Context)
 
-    /** Whether the presets are a list Dashwheel keeps ([togglePin], [remove]). */
+    /** Whether the presets are a list the driver keeps in Dashwheel ([add], [remove]). */
     val editable: Boolean get() = false
-    fun togglePin(context: Context, station: RadioStation) = Unit
+    fun add(context: Context, station: RadioStation) = Unit
     fun remove(context: Context, station: RadioStation) = Unit
 
     /** The presets tile's text while there is nothing to list. */

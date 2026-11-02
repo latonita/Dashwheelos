@@ -23,8 +23,9 @@ import java.util.concurrent.CopyOnWriteArraySet
  * tune, preset step and seek, not on pause) and when its screen is created or destroyed (`xy.radio.onstart` /
  * `xy.radio.onfinish`); there is no play broadcast, no property, no setting. It takes its orders as broadcasts too,
  * but only while its screen is alive (a receiver registered in onCreate): when it isn't, it is started with the
- * frequency as an extra and the dashboard brought back. Its presets are in a private provider, so the list is
- * learned here from what it tunes ([FmStations]), which the driver can pin or remove from.
+ * frequency as an extra and the dashboard brought back. Its presets are in a private provider, so the presets are a
+ * list of the driver's own ([FmStations]): the driver adds the station that is playing and removes them, and nothing
+ * is ever added from what the radio tunes.
  *
  * Whether it plays is not announced: it is up, the last order wasn't pause, and it holds the audio focus (read from
  * the vendor's `AudioManager.getCurrentAudioFocusContentName()` where there is one, else "music is active").
@@ -63,7 +64,7 @@ internal object XyFmRadio : StockRadio {
     /** The last order we sent was pause (a tune or any broadcast of the radio's own clears it). */
     @Volatile private var paused = false
     @Volatile private var lastFreqAt = 0L
-    private var learned = FmStations()
+    private var saved = FmStations()
     private var loggedFocus: String? = null
 
     private val _stations = MutableStateFlow<List<RadioStation>>(emptyList())
@@ -71,7 +72,7 @@ internal object XyFmRadio : StockRadio {
 
     override val packageName: String = PACKAGE
     override val judgesSource = true
-    override val emptyTextRes = R.string.widgets_radio_empty_learned
+    override val emptyTextRes = R.string.widgets_radio_empty_add
     override val editable = true
     override val stations: StateFlow<List<RadioStation>> = _stations
     override val playing: StateFlow<RadioStation?> = _playing
@@ -94,7 +95,7 @@ internal object XyFmRadio : StockRadio {
                     alive = true
                     paused = false
                     lastFreqAt = SystemClock.elapsedRealtime()
-                    learn(freq)
+                    note(freq)
                 }
                 ACTION_ON_START -> { alive = true; paused = false }
                 ACTION_ON_FINISH -> alive = false
@@ -109,8 +110,8 @@ internal object XyFmRadio : StockRadio {
         if (users++ > 0) return
         app = a
         val prefs = prefs(a)
-        learned = FmStations.parse(prefs.getString(KEY_STATIONS, null))
-        _stations.value = learned.shown()
+        saved = FmStations.parse(prefs.getString(KEY_STATIONS, null))
+        _stations.value = saved.shown()
         // What it was on at the last run, so a restart shows something before the radio says anything.
         prefs.getInt(KEY_LAST, 0).takeIf(::isFm)?.let { _playing.value = named(it) }
         // The radio's screen can't be asked about; holding the audio is the one sign of a radio that is up already.
@@ -126,29 +127,28 @@ internal object XyFmRadio : StockRadio {
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** A station with the name we know for it (learned, else the one the QF-era `radio_names` kept). */
+    /** A station with the name we know for it (saved, else the one the QF-era `radio_names` kept). */
     private fun named(freq: Int): RadioStation {
-        val name = learned.nameOf(freq).ifEmpty {
+        val name = saved.nameOf(freq).ifEmpty {
             app?.getSharedPreferences("radio_names", Context.MODE_PRIVATE)?.getString(freq.toString(), null).orEmpty()
         }
         return RadioStation(freq, name)
     }
 
-    private fun learn(freq: Int) {
-        learned = learned.heard(freq, System.currentTimeMillis())
-        _stations.value = learned.shown()
+    /** The radio tuned [freq]: what is playing, and what it was on last. The list of presets is left alone. */
+    private fun note(freq: Int) {
         _playing.value = named(freq)
-        app?.let { prefs(it).edit().putString(KEY_STATIONS, learned.serialize()).putInt(KEY_LAST, freq).apply() }
+        app?.let { prefs(it).edit().putInt(KEY_LAST, freq).apply() }
     }
 
     private fun edit(change: (FmStations) -> FmStations) {
-        learned = change(learned)
-        _stations.value = learned.shown()
+        saved = change(saved)
+        _stations.value = saved.shown()
         _playing.value = _playing.value?.let { named(it.freq) }
-        app?.let { prefs(it).edit().putString(KEY_STATIONS, learned.serialize()).apply() }
+        app?.let { prefs(it).edit().putString(KEY_STATIONS, saved.serialize()).apply() }
     }
 
-    override fun togglePin(context: Context, station: RadioStation) = edit { it.togglePin(station.freq) }
+    override fun add(context: Context, station: RadioStation) = edit { it.add(station.freq, station.name) }
 
     override fun remove(context: Context, station: RadioStation) = edit { it.remove(station.freq) }
 

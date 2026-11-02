@@ -4,6 +4,7 @@ package com.openauto.dash
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,8 +53,9 @@ private val NO_STATION: StateFlow<RadioStation?> = MutableStateFlow(null)
 
 /**
  * The unit's FM radio from a tile ([StockRadio]: [QfRadio] or [XyFmRadio], whichever the unit's adapter has): its
- * stations, the one playing, a tap to tune. Where the list is one Dashwheel keeps ([StockRadio.editable]), a long
- * press on a station pins it to the front or removes it.
+ * stations, the one playing, a tap to tune. Where the list is one the driver keeps ([StockRadio.editable]), a "+" cell
+ * saves the station that is playing (room permitting) and a long
+ * press on a station removes it.
  */
 @Composable
 internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
@@ -83,16 +85,32 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                 Text(stringResource(R.string.widgets_radio_none), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 return@Column
             }
+            val addable = playing?.takeIf { radio.editable && canSaveStation(stations, it) }
             if (stations.isEmpty()) {
                 Text(stringResource(radio.emptyTextRes), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                return@Column
+                if (addable == null) return@Column
             }
-            val pinnedCount = stations.count { it.pinned }
-            // Two rows of three: big enough for a finger at the wheel.
+            // Two rows of three: big enough for a finger at the wheel. The saved ones, then the "+" cell (null).
+            val cells: List<RadioStation?> = if (addable != null) stations + null else stations
             Column(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DashSpace.Sm)) {
-                stations.chunked(3).forEach { row ->
+                cells.chunked(3).forEach { row ->
                     Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DashSpace.Sm)) {
                         row.forEach { s ->
+                            if (s == null) {
+                                // Saves the station that is playing: outlined, so it doesn't read as a preset.
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight().clip(DashShape.Medium)
+                                        .border(1.dp, DashColors.Line, DashShape.Medium)
+                                        .combinedClickable(role = Role.Button, onClick = { tap(); radio.add(context, addable!!) }),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "+ " + addable!!.mhz, color = DashColors.TextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = DashSpace.Xs)
+                                    )
+                                }
+                                return@forEach
+                            }
                             val on = playing?.freq == s.freq
                             var menu by remember(s.freq) { mutableStateOf(false) }
                             Box(
@@ -119,13 +137,6 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                     containerColor = DashColors.Card.copy(alpha = 1f),
                                     border = BorderStroke(1.dp, DashColors.Line)
                                 ) {
-                                    // Pins are as many as the tile has room for.
-                                    if (s.pinned || pinnedCount < StockRadio.SHOWN) {
-                                        RadioMenuItem(stringResource(if (s.pinned) R.string.widgets_radio_unpin else R.string.widgets_radio_pin)) {
-                                            menu = false
-                                            radio.togglePin(context, s)
-                                        }
-                                    }
                                     RadioMenuItem(stringResource(R.string.widgets_radio_remove)) {
                                         menu = false
                                         radio.remove(context, s)
@@ -168,3 +179,7 @@ internal fun radioPresetsFace(): WidgetFace {
         )
     )
 }
+
+/** Whether the "+" cell shows: [playing] is a station that isn't among [saved] yet, and the tile has room for one more. */
+internal fun canSaveStation(saved: List<RadioStation>, playing: RadioStation?): Boolean =
+    playing != null && saved.size < StockRadio.SHOWN && saved.none { it.freq == playing.freq }

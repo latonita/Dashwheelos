@@ -40,9 +40,7 @@
     <string name="widgets_radio_previous">Előző adó</string>
     <string name="widgets_radio_none">Ezen az egységen nincs rádió</string>
     <string name="widgets_radio_empty">Még nincs mentett adó: mentsen néhányat a rádió alkalmazásban</string>
-    <string name="widgets_radio_empty_learned">Hangoljon be adókat a rádió alkalmazásban: itt fognak megjelenni</string>
-    <string name="widgets_radio_pin">Rögzítés</string>
-    <string name="widgets_radio_unpin">Rögzítés törlése</string>
+    <string name="widgets_radio_empty_add">Koppintson a + gombra a most szóló adó mentéséhez</string>
     <string name="widgets_radio_remove">Eltávolítás</string>
     <string name="widgets_hw_home">Otthon</string>
     <string name="widgets_hw_work">Munka</string>

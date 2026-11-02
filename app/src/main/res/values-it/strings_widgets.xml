@@ -39,9 +39,7 @@
     <string name="widgets_radio_previous">Stazione precedente</string>
     <string name="widgets_radio_none">Nessuna radio su questo apparecchio</string>
     <string name="widgets_radio_empty">Nessuna stazione: salvale nell\'app radio</string>
-    <string name="widgets_radio_empty_learned">Sintonizza delle stazioni nell’app radio: appariranno qui</string>
-    <string name="widgets_radio_pin">Fissa</string>
-    <string name="widgets_radio_unpin">Sblocca</string>
+    <string name="widgets_radio_empty_add">Tocca + per salvare la stazione in ascolto</string>
     <string name="widgets_radio_remove">Rimuovi</string>
     <string name="widgets_hw_home">Casa</string>
     <string name="widgets_hw_work">Lavoro</string>

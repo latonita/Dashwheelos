@@ -39,9 +39,7 @@
     <string name="widgets_radio_previous">Station précédente</string>
     <string name="widgets_radio_none">Pas de radio sur cet autoradio</string>
     <string name="widgets_radio_empty">Aucune station : enregistrez-en dans l\'appli radio</string>
-    <string name="widgets_radio_empty_learned">Réglez des stations dans l’appli radio : elles apparaîtront ici</string>
-    <string name="widgets_radio_pin">Épingler</string>
-    <string name="widgets_radio_unpin">Détacher</string>
+    <string name="widgets_radio_empty_add">Touchez + pour enregistrer la station en cours</string>
     <string name="widgets_radio_remove">Retirer</string>
     <string name="widgets_hw_home">Maison</string>
     <string name="widgets_hw_work">Travail</string>

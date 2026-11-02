@@ -40,9 +40,7 @@
     <string name="widgets_radio_previous">Предыдущая станция</string>
     <string name="widgets_radio_none">На этой магнитоле нет радио</string>
     <string name="widgets_radio_empty">Нет сохранённых станций: сохраните их в приложении радио</string>
-    <string name="widgets_radio_empty_learned">Настройте станции в приложении радио: они появятся здесь</string>
-    <string name="widgets_radio_pin">Закрепить</string>
-    <string name="widgets_radio_unpin">Открепить</string>
+    <string name="widgets_radio_empty_add">Нажмите +, чтобы сохранить текущую станцию</string>
     <string name="widgets_radio_remove">Удалить</string>
     <string name="widgets_hw_home">Дом</string>
     <string name="widgets_hw_work">Работа</string>
