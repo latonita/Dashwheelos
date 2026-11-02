@@ -55,6 +55,10 @@ android {
     productFlavors {
         create("github") {
             dimension = "edition"
+            // -PdashApplicationId=<id> installs this edition under another package (the
+            // Kotlin namespace stays com.openauto.dash), e.g. a head unit that spares
+            // com.android.launcher3 when it force-stops apps at ignition-off.
+            providers.gradleProperty("dashApplicationId").orNull?.let { applicationId = it }
             buildConfigField("boolean", "PLAY", "false")
             // Keep rules for the libraries only this edition ships (dadb).
             proguardFile("proguard-github.pro")
