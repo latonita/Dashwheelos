@@ -25,6 +25,7 @@ import com.openauto.dash.UnitAdapter
 import com.openauto.dash.UnitCaps
 import com.openauto.dash.UnitKeyPress
 import com.openauto.dash.UnitPlatform
+import com.openauto.dash.XyFmRadio
 import com.openauto.dash.isEmulator
 import com.openauto.unitproto.AccBroadcasts
 import com.openauto.unitproto.KeyBroadcasts
@@ -50,7 +51,7 @@ internal object PlainAdapters {
 
     /** Every vendor package any adapter talks to: declared in the manifest's queries (QueriesCoverageTest). */
     val ALL_VENDOR_PACKAGES: Set<String>
-        get() = TOPWAY_PACKAGES + REGLINK_PACKAGES + XyautoProtocol.PACKAGES + FytProtocol.PACKAGES + MtcProtocol.PACKAGES +
+        get() = TOPWAY_PACKAGES + REGLINK_PACKAGES + XyautoProtocol.PACKAGES + XyFmRadio.PACKAGE + FytProtocol.PACKAGES + MtcProtocol.PACKAGES +
             setOf(QfAdapter.VEHICLE_PACKAGE, QfAdapter.BT_PACKAGE, QfAdapter.RADIO_PACKAGE, "com.qf.backcar", "com.qf.framework", "com.syt.tmps")
 
     /** Every family's broadcasts: what the Signal Finder's sniffer hears whatever the unit was taken for. */
