@@ -39,6 +39,10 @@
     <string name="widgets_radio_previous">Emisora anterior</string>
     <string name="widgets_radio_none">No hay radio en este equipo</string>
     <string name="widgets_radio_empty">Aún no hay emisoras: guárdalas en la app de radio</string>
+    <string name="widgets_radio_empty_learned">Sintoniza emisoras en la app de radio: aparecerán aquí</string>
+    <string name="widgets_radio_pin">Fijar</string>
+    <string name="widgets_radio_unpin">Soltar</string>
+    <string name="widgets_radio_remove">Quitar</string>
     <string name="widgets_hw_home">Casa</string>
     <string name="widgets_hw_work">Trabajo</string>
     <string name="widgets_hw_empty">Define Casa y Trabajo en Ajustes, Conducción, Lugares</string>

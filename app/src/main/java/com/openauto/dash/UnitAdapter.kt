@@ -28,6 +28,8 @@ interface UnitAdapter {
     val keys: KeySource?
     val phone: PhoneBridge?
     val media: MediaBridge?
+    /** The unit's FM radio app, for the media tile and the radio presets tile; null where it has none. */
+    val radio: StockRadio? get() = null
     val volume: VolumeControl?
     val launcher: LauncherTakeover?
     val popups: PopupTakeover?

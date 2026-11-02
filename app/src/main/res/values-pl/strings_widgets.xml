@@ -39,6 +39,10 @@
     <string name="widgets_radio_previous">Poprzednia stacja</string>
     <string name="widgets_radio_none">Brak radia w tym urządzeniu</string>
     <string name="widgets_radio_empty">Brak stacji: zapisz je w aplikacji radia</string>
+    <string name="widgets_radio_empty_learned">Dostrój stacje w aplikacji radia: pojawią się tutaj</string>
+    <string name="widgets_radio_pin">Przypnij</string>
+    <string name="widgets_radio_unpin">Odepnij</string>
+    <string name="widgets_radio_remove">Usuń</string>
     <string name="widgets_hw_home">Dom</string>
     <string name="widgets_hw_work">Praca</string>
     <string name="widgets_hw_empty">Ustaw Dom i Pracę w Ustawieniach, Jazda, Miejsca</string>
