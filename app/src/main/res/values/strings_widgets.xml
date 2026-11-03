@@ -171,4 +171,6 @@
     <string name="widgets_switch_bluetooth_detail">Turns Bluetooth on or off</string>
     <string name="widgets_switch_mobile_data_detail">Turns the SIM card\'s data on or off</string>
     <string name="widgets_switch_screen_off_detail">Turns the screen off like the unit\'s own key</string>
+    <string name="map_tile_3d_buildings">3D buildings</string>
+    <string name="map_tile_3d_buildings_detail">Show buildings as raised blocks. Uses more of the graphics chip.</string>
 </resources>
