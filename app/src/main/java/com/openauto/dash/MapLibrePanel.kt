@@ -188,6 +188,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     // wallpaper's cap) as soon as the page starts sliding in ([LocalPageActive]).
     // Paused or stopped it is not: a tile map put to sleep came back black.
     val pageActive = LocalPageActive.current
+    val pageActiveNow = rememberUpdatedState(pageActive)
     LaunchedEffect(pageActive) {
         mapView.setMaximumFps(if (!pageActive) HIDDEN_FPS else if (wallpaper) WALLPAPER_FPS else TILE_FPS)
         if (pageActive) mapRef?.triggerRepaint()
@@ -249,7 +250,8 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         // The component throws until it's switched on (style loaded, location
         // allowed): a destination picked before that is "GPS not ready", not a crash.
         @SuppressLint("MissingPermission")
-        val loc = runCatching { map?.locationComponent?.lastKnownLocation }.getOrNull()
+        // The real latest fix: the component's own is the drawn one, a second behind.
+        val loc = LocationFeed.location.value ?: runCatching { map?.locationComponent?.lastKnownLocation }.getOrNull()
         if (map == null || loc == null) {
             loading = false
             error = context.getString(R.string.info_map_gps_not_ready)
@@ -522,7 +524,9 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(hasLocation, styleReady) {
         if (!hasLocation || !styleReady) return@LaunchedEffect
         val map = mapRef ?: return@LaunchedEffect
-        map.getStyle { style -> enableLocation(map, style, context, scope, mapView, wallpaper) }
+        map.getStyle { style -> enableLocation(map, style, context, scope, mapView, wallpaper) {
+            1000L / (if (!pageActiveNow.value) HIDDEN_FPS else if (wallpaper) WALLPAPER_FPS else TILE_FPS)
+        } }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -807,7 +811,9 @@ private fun enableLocation(
     scope: kotlinx.coroutines.CoroutineScope,
     mapView: MapView,
     /** Set when the map is a wallpaper: the camera sits lower and the car lower on it. */
-    wallpaper: Boolean
+    wallpaper: Boolean,
+    /** Milliseconds between the frames the puck and camera glide at: the map's own frame cap. */
+    tickMs: () -> Long = { 1000L / TILE_FPS }
 ) {
     if (!hasLocationPerm(context)) return
     val lc = map.locationComponent
@@ -820,8 +826,55 @@ private fun enableLocation(
                     .locationComponentOptions(
                         puckOptions(context, DashColors.Accent)
                     )
+                    .useDefaultLocationEngine(false)
                     .build()
             )
+            // The puck and the follow camera are drawn one fix interval late and glide
+            // to each fix at constant speed ([FollowTrack]), so they move between the
+            // 1 Hz fixes instead of in a burst after each. Only what the map draws is
+            // delayed: LocationFeed itself, and so speed, trip, elevation and routing, keep
+            // the real latest fix. The component gets a position every frame, each one a
+            // short step, so its own easing (about one frame long) stays unnoticeable.
+            val track = FollowTrack()
+            var template: android.location.Location? = null
+            var finalSent = true
+            fun push(now: Long) {
+                val t = template ?: return
+                val p = track.at(now) ?: return
+                val shown = android.location.Location(t)
+                shown.latitude = p.lat
+                shown.longitude = p.lon
+                if (t.hasBearing()) shown.bearing = p.bearing.toFloat()
+                runCatching { lc.forceLocationUpdate(shown) }
+            }
+            scope.launch {
+                var last: android.location.Location? = null
+                LocationFeed.location.collect { loc ->
+                    if (loc == null) return@collect
+                    val l = last
+                    if (l != null && FixWander.ignore(lc in stationaryLcs, loc.distanceTo(l))) return@collect
+                    last = loc
+                    template = loc
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    track.feed(
+                        loc.latitude, loc.longitude,
+                        if (loc.hasBearing()) loc.bearing.toDouble() else null,
+                        if (loc.hasSpeed()) loc.speed.toDouble() else SmoothFollow.STILL_MPS,
+                        now
+                    )
+                    finalSent = false
+                    if (track.done(now)) { push(now); finalSent = true }
+                }
+            }
+            scope.launch {
+                while (true) {
+                    delay(tickMs())
+                    if (finalSent) continue
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    push(now)
+                    if (track.done(now)) finalSent = true
+                }
+            }
             // The zoom the driver picks by hand is the one tracking comes back
             // to; route previews and search hits don't change it.
             var byGesture = false
