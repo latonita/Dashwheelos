@@ -8,7 +8,7 @@ import java.util.Locale
 /**
  * A station: [freq] in the radio's 10 kHz units (9850 = 98.5 MHz); [name] empty when none is known.
  */
-data class RadioStation(val freq: Int, val name: String) {
+data class RadioStation(val freq: Int, val name: String, val pi: String = "") {
     val mhz: String get() = String.format(Locale.ROOT, "%.1f", freq / 100.0)
 }
 
@@ -77,8 +77,8 @@ interface StockRadio {
     /** The name the driver gave [station] (not the one it broadcasts); what a rename starts from. */
     fun ownName(station: RadioStation): String = station.name
 
-    /** The radio's own media session says it plays [mediaId] ("fm:8820") under [title]: names heard are kept. */
-    fun onSession(mediaId: String?, title: String?) = Unit
+    /** The radio's own media session says it plays [mediaId] ("fm:8820") under [title] and RDS PI [pi]: what is heard is kept. */
+    fun onSession(mediaId: String?, title: String?, pi: String? = null) = Unit
 
     /** The presets tile's text while there is nothing to list. */
     @get:StringRes val emptyTextRes: Int

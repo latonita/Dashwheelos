@@ -206,7 +206,7 @@ class CarMediaController(private val context: Context) {
         if (radio != null && metadata != null) {
             val mediaId = metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
             val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE)
-            radio.onSession(mediaId, title)
+            radio.onSession(mediaId, title, metadata.getString("xy.fm.pi"))
             showMedia(fmSessionState(title, metadata.getString(MediaMetadata.METADATA_KEY_ARTIST), parseFmMediaId(mediaId), playing))
             return
         }

@@ -98,7 +98,7 @@ internal fun pickSource(sessions: List<SessionView>, radioAlive: Boolean, radioF
 }
 
 /** One station the driver saved: [freq] in 10 kHz units, [name] empty when none is known. */
-internal data class FmEntry(val freq: Int, val name: String = "")
+internal data class FmEntry(val freq: Int, val name: String = "", val pi: String = "")
 
 /**
  * The stations the driver saved for the presets tile, in the order they were added (never reordered), at most
@@ -114,22 +114,38 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
     fun canAdd(freq: Int, max: Int = StockRadio.SHOWN): Boolean = isFm(freq) && !contains(freq) && entries.size < max
 
     /** [freq] saved after the others; the same list when it can't be ([canAdd]). */
-    fun add(freq: Int, name: String = "", max: Int = StockRadio.SHOWN): FmStations =
-        if (canAdd(freq, max)) FmStations(entries + FmEntry(freq, clean(name))) else this
+    fun add(freq: Int, name: String = "", max: Int = StockRadio.SHOWN, pi: String = ""): FmStations =
+        if (canAdd(freq, max)) FmStations(entries + FmEntry(freq, clean(name), parseFmPi(pi).orEmpty())) else this
+
+    /** [pi] kept for the saved [freq] when it has none yet; never for another frequency, never over a PI it has. */
+    fun fillPi(freq: Int, pi: String?): FmStations {
+        val p = parseFmPi(pi) ?: return this
+        if (entries.none { it.freq == freq && it.pi.isEmpty() }) return this
+        return FmStations(entries.map { if (it.freq == freq) it.copy(pi = p) else it })
+    }
+
+    fun piOf(freq: Int): String = entries.firstOrNull { it.freq == freq }?.pi.orEmpty()
 
     /** [freq] saved under [name] (blank clears it); the same list when [freq] isn't saved. */
     fun rename(freq: Int, name: String): FmStations =
         if (!contains(freq)) this
-        else FmStations(entries.map { if (it.freq == freq) FmEntry(freq, clean(name).take(MAX_NAME)) else it })
+        else FmStations(entries.map { if (it.freq == freq) it.copy(name = clean(name).take(MAX_NAME)) else it })
 
     fun remove(freq: Int): FmStations = FmStations(entries.filter { it.freq != freq })
 
     /** The stations in the order shown. */
-    fun shown(): List<RadioStation> = entries.map { RadioStation(it.freq, it.name) }
+    fun shown(): List<RadioStation> = entries.map { RadioStation(it.freq, it.name, it.pi) }
 
     fun nameOf(freq: Int): String = entries.firstOrNull { it.freq == freq }?.name.orEmpty()
 
+    /**
+     * One "freq TAB name" line per station. The PI codes are NOT in these lines: an older build reads only 2-field
+     * (or 5-field) lines and would drop a 3-field one with the preset, so they have their own text ([serializePis]).
+     */
     fun serialize(): String = entries.joinToString("\n") { "${it.freq}\t${it.name}" }
+
+    /** One "freq TAB PI" line per station that has a PI; read back by [parse]'s `pis`. */
+    fun serializePis(): String = entries.filter { it.pi.isNotEmpty() }.joinToString("\n") { "${it.freq}\t${it.pi}" }
 
     companion object {
         /** The longest name kept, in characters. */
@@ -144,7 +160,7 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
          * Also reads the older format, which learned every station heard ("freq, name, pin, heard, at" per line): only
          * the pinned ones (the driver's own choice) are kept, in the order they were pinned.
          */
-        fun parse(text: String?, max: Int = StockRadio.SHOWN): FmStations {
+        fun parse(text: String?, max: Int = StockRadio.SHOWN, pis: String? = null): FmStations {
             val pinned = ArrayList<Pair<Int, FmEntry>>()
             val saved = ArrayList<FmEntry>()
             for (line in text.orEmpty().lineSequence()) {
@@ -152,11 +168,13 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
                 val freq = p[0].toIntOrNull()?.takeIf(::isFm) ?: continue
                 when (p.size) {
                     2 -> saved += FmEntry(freq, clean(p[1]))
+                    3 -> saved += FmEntry(freq, clean(p[1]), parseFmPi(p[2]).orEmpty())
                     5 -> p[2].toIntOrNull()?.takeIf { it > 0 }?.let { pinned += it to FmEntry(freq, clean(p[1])) }
                 }
             }
             val all = pinned.sortedBy { it.first }.map { it.second } + saved
-            return FmStations(all.distinctBy { it.freq }.take(max))
+            val byFreq = FmPis.parse(pis).pis
+            return FmStations(all.distinctBy { it.freq }.take(max).map { if (it.pi.isEmpty()) it.copy(pi = byFreq[it.freq].orEmpty()) else it })
         }
     }
 }
@@ -219,6 +237,41 @@ internal class FmLearned(val names: Map<Int, String> = emptyMap()) {
                 m[f] = n
             }
             return FmLearned(m)
+        }
+    }
+}
+
+/** The RDS PI a session reports ("3033", 4 hex digits) in upper case; null when absent, not hex, or 0000. */
+internal fun parseFmPi(text: String?): String? =
+    text?.trim()?.takeIf { it.length == 4 && it.all { c -> c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F' } }
+        ?.uppercase()?.takeIf { it != "0000" }
+
+/** The PI codes heard, by frequency; one "freq TAB PI" line each when [serialize]d. Immutable. */
+internal class FmPis(val pis: Map<Int, String> = emptyMap()) {
+    fun piOf(freq: Int): String = pis[freq].orEmpty()
+
+    fun learn(freq: Int, pi: String?, max: Int = 120): FmPis {
+        val p = parseFmPi(pi) ?: return this
+        if (!isFm(freq) || pis[freq] == p) return this
+        val next = LinkedHashMap(pis)
+        next.remove(freq)
+        next[freq] = p
+        while (next.size > max) next.remove(next.keys.first())
+        return FmPis(next)
+    }
+
+    fun serialize(): String = pis.entries.joinToString("\n") { "${it.key}\t${it.value}" }
+
+    companion object {
+        fun parse(text: String?): FmPis {
+            val m = LinkedHashMap<Int, String>()
+            for (line in text.orEmpty().lineSequence()) {
+                val p = line.split('\t')
+                if (p.size != 2) continue
+                val f = p[0].toIntOrNull()?.takeIf(::isFm) ?: continue
+                m[f] = parseFmPi(p[1]) ?: continue
+            }
+            return FmPis(m)
         }
     }
 }

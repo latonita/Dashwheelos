@@ -141,6 +141,8 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
                                     )
                                     if (s.name.isNotEmpty()) Text(s.mhz, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                    // For comparing the same station on two frequencies; easy to drop later.
+                                    if (s.pi.isNotEmpty()) Text("PI " + s.pi, color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                 }
                                 if (renaming) RenameDialog(s, radio.ownName(s), onDone = { renaming = false }, onName = { radio.rename(context, s, it) })
                                 WindowMenu(

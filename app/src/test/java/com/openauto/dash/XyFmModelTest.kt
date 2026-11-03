@@ -324,4 +324,56 @@ class XyFmModelTest {
         assertEquals(SourcePick.Radio, pickSource(listOf(bt), radioAlive = true, radioFocus = true, radioPackage = "com.android.fmradio"))
         assertEquals(SourcePick.Radio, pickSource(listOf(bt), radioAlive = true, radioFocus = false, radioPackage = "com.android.fmradio"))
     }
+
+    @Test
+    fun pi_parsesHexAbsentAndGarbage() {
+        assertEquals("3033", parseFmPi("3033"))
+        assertEquals("C1A0", parseFmPi(" c1a0 "))
+        assertNull(parseFmPi(null))
+        assertNull(parseFmPi(""))
+        assertNull(parseFmPi("303"))
+        assertNull(parseFmPi("30333"))
+        assertNull(parseFmPi("zz33"))
+        assertNull(parseFmPi("0000"))
+    }
+
+    @Test
+    fun pi_savedPresetKeepsItAndOldLinesStillParse() {
+        val l = FmStations().add(9940, "PLAY", pi = "3033").add(8820, "x")
+        assertEquals("3033", l.piOf(9940))
+        // The stations text stays the old 2-field one; the PIs have their own.
+        assertEquals("9940\tPLAY\n8820\tx", l.serialize())
+        val back = FmStations.parse(l.serialize(), pis = l.serializePis())
+        assertEquals(l.entries, back.entries)
+        // Old text without any PI text.
+        val old = FmStations.parse("9940\tPLAY\n8820\tx")
+        assertEquals("", old.piOf(9940))
+        assertEquals("PLAY", old.nameOf(9940))
+        // A 3-field line is read too.
+        assertEquals("3033", FmStations.parse("9940\tPLAY\t3033").piOf(9940))
+    }
+
+    @Test
+    fun pi_fillInIsOnlyForTheMatchingFrequencyAndOnlyOnce() {
+        val l = FmStations().add(9940, "A").add(8820, "B")
+        val f = l.fillPi(9940, "3033")
+        assertEquals("3033", f.piOf(9940))
+        assertEquals("", f.piOf(8820))
+        assertEquals("3033", f.fillPi(9940, "AAAA").piOf(9940))
+        assertEquals(l.serializePis(), l.fillPi(10_000, "3033").serializePis())
+        assertEquals("", l.fillPi(9940, "garbage").piOf(9940))
+    }
+
+    @Test
+    fun pi_heardIsKeptPerFrequency() {
+        val h = FmPis().learn(9940, "3033").learn(8820, "zz").learn(1008, "3033")
+        assertEquals("3033", h.piOf(9940))
+        assertEquals("", h.piOf(8820))
+        assertEquals("3033", FmPis.parse(h.serialize()).piOf(9940))
+    }
+
+    @Test
+    fun pi_renameKeepsThePi() {
+        assertEquals("3033", FmStations().add(9940, "A", pi = "3033").rename(9940, "B").piOf(9940))
+    }
 }

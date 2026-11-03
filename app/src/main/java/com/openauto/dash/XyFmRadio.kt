@@ -55,6 +55,8 @@ internal object XyFmRadio : StockRadio {
     private const val KEY_LAST = "last_freq"
     private const val KEY_STATIONS = "stations"
     private const val KEY_RDS_NAMES = "rds_names"
+    private const val KEY_RDS_PI = "rds_pi"
+    private const val KEY_STATION_PI = "station_pi"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
@@ -111,7 +113,8 @@ internal object XyFmRadio : StockRadio {
         if (users++ > 0) return
         app = a
         val prefs = prefs(a)
-        saved = FmStations.parse(prefs.getString(KEY_STATIONS, null))
+        saved = FmStations.parse(prefs.getString(KEY_STATIONS, null), pis = prefs.getString(KEY_STATION_PI, null))
+        heardPi = FmPis.parse(prefs.getString(KEY_RDS_PI, null))
         learned = FmLearned.parse(prefs.getString(KEY_RDS_NAMES, null))
         _stations.value = shownStations()
         // What it was on at the last run, so a restart shows something before the radio says anything.
@@ -132,16 +135,27 @@ internal object XyFmRadio : StockRadio {
     /** The names stations broadcast, as the radio's session told them. */
     private var learned = FmLearned()
 
-    private fun shownStations(): List<RadioStation> = saved.entries.map { RadioStation(it.freq, fmDisplayName(it.name, learned.nameOf(it.freq))) }
+    private fun shownStations(): List<RadioStation> = saved.entries.map { RadioStation(it.freq, fmDisplayName(it.name, learned.nameOf(it.freq)), it.pi.ifEmpty { heardPi.piOf(it.freq) }) }
 
     override fun ownName(station: RadioStation): String = saved.nameOf(station.freq)
 
-    override fun onSession(mediaId: String?, title: String?) {
+    /** The PI codes heard, by frequency. */
+    private var heardPi = FmPis()
+
+    override fun onSession(mediaId: String?, title: String?, pi: String?) {
+        // Only what the session says about the frequency in its own MEDIA_ID: a PI from before a retune isn't kept.
         val freq = parseFmMediaId(mediaId) ?: return
-        val next = learned.learn(freq, title)
-        if (next === learned) return
-        learned = next
-        app?.let { prefs(it).edit().putString(KEY_RDS_NAMES, learned.serialize()).apply() }
+        val names = learned.learn(freq, title)
+        val pis = heardPi.learn(freq, pi)
+        val filled = saved.fillPi(freq, pi)
+        if (names === learned && pis === heardPi && filled === saved) return
+        learned = names
+        heardPi = pis
+        saved = filled
+        app?.let {
+            prefs(it).edit().putString(KEY_RDS_NAMES, learned.serialize()).putString(KEY_RDS_PI, heardPi.serialize())
+                .putString(KEY_STATION_PI, saved.serializePis()).apply()
+        }
         _stations.value = shownStations()
         _playing.value = _playing.value?.let { named(it.freq) }
         tell()
@@ -152,7 +166,7 @@ internal object XyFmRadio : StockRadio {
         val name = fmDisplayName(saved.nameOf(freq), learned.nameOf(freq)).ifEmpty {
             app?.getSharedPreferences("radio_names", Context.MODE_PRIVATE)?.getString(freq.toString(), null).orEmpty()
         }
-        return RadioStation(freq, name)
+        return RadioStation(freq, name, saved.piOf(freq).ifEmpty { heardPi.piOf(freq) })
     }
 
     /** The radio tuned [freq]: what is playing, and what it was on last. The list of presets is left alone. */
@@ -165,10 +179,10 @@ internal object XyFmRadio : StockRadio {
         saved = change(saved)
         _stations.value = shownStations()
         _playing.value = _playing.value?.let { named(it.freq) }
-        app?.let { prefs(it).edit().putString(KEY_STATIONS, saved.serialize()).apply() }
+        app?.let { prefs(it).edit().putString(KEY_STATIONS, saved.serialize()).putString(KEY_STATION_PI, saved.serializePis()).apply() }
     }
 
-    override fun add(context: Context, station: RadioStation) = edit { it.add(station.freq, station.name) }
+    override fun add(context: Context, station: RadioStation) = edit { it.add(station.freq, station.name, pi = station.pi.ifEmpty { heardPi.piOf(station.freq) }) }
 
     override fun remove(context: Context, station: RadioStation) = edit { it.remove(station.freq) }
 
