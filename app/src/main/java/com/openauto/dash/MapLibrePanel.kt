@@ -410,6 +410,10 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(mapRef, styleUrl) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
+            // The stock dark style is too low-contrast for a car screen; lift
+            // it, but only for the built-in default (a custom URL is the
+            // user's own look).
+            if (!lightMap && styleUrl == MapServers.DEFAULT_STYLE_DARK) MapDarkContrast.apply(style)
             // The route's source and layers belong to the style, and switching
             // between the day and night styles builds a new one — so the line
             // has to be made again each time or it disappears with the old
