@@ -1455,6 +1455,8 @@ private fun LevelMeter(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
 @Composable
 private fun Elevation(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
     val e = f.elevation ?: return
+    // The scrim over a tile in edit mode takes the taps first (DashboardGrid), so this only fires on a tile at rest.
+    Box(Modifier.fillMaxSize().then(e.onZoom?.let { Modifier.clickable(onClick = it) } ?: Modifier)) {
     Stack(f, look, m, foot = {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(m.dp(3f))) {
             FaceText(e.now, look, m.sp(min(m.h * 0.18f, m.w * 0.12f)), Modifier.weight(1f, fill = false), weight = FontWeight.ExtraBold, fit = true)
@@ -1473,6 +1475,7 @@ private fun Elevation(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
                 }
             }
         }
+    }
     }
 }
 

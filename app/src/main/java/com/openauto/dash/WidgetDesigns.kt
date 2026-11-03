@@ -246,7 +246,9 @@ internal data class FaceElevation(
     val min: String,
     val max: String,
     /** "Last 12.4 km", or the hint to drive a little while there is no chart. */
-    val caption: String
+    val caption: String,
+    /** A tap on the face: the next zoom. Null where the face is not touched. */
+    val onZoom: (() -> Unit)? = null
 )
 
 @Immutable

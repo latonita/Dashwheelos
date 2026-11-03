@@ -107,17 +107,26 @@ internal fun gpsStatusFace(): WidgetFace {
     val (seen, used) = rememberSatellites(perm.granted)
     val location by LocationFeed.location.collectAsState()
     val units by Units.current.collectAsState()
-    val profile by ElevationRecorder.profile.collectAsState()
+    val track by ElevationRecorder.profile.collectAsState()
+    val zoom by ElevationRecorder.zoomKm.collectAsState()
     val loc = location
     val altitude = loc?.takeIf { it.hasAltitude() }?.let { units.shortDistance(it.altitude) } ?: NO_READING
-    val history = profile.size * ElevationTrack.STEP_M
+    val history = track.size * ElevationTrack.STEP_M
     val enough = history >= ENOUGH_ELEVATION_M
+    // Only the newest [zoom] km: the chart, and its min, max and scale.
+    val profile = ElevationZoom.window(track, zoom)
+    val shown = profile.size * ElevationTrack.STEP_M
     val elevation = FaceElevation(
         points = profile.takeIf { enough },
         now = altitude,
         min = if (enough) units.shortDistance(profile.min().toDouble()) else "",
         max = if (enough) units.shortDistance(profile.max().toDouble()) else "",
-        caption = if (enough) stringResource(R.string.design_elevation_span, units.shortDistance(history)) else stringResource(R.string.design_elevation_hint)
+        caption = when {
+            !enough -> stringResource(R.string.design_elevation_hint)
+            shown < zoom * 1000.0 - ElevationTrack.STEP_M -> stringResource(R.string.design_elevation_span_part, units.shortDistance(shown), units.distanceText(zoom))
+            else -> stringResource(R.string.design_elevation_span, units.distanceText(zoom))
+        },
+        onZoom = ElevationRecorder::cycleZoom
     )
     return WidgetFace(
         icon = if (loc != null) Icons.Filled.GpsFixed else Icons.Filled.GpsNotFixed,

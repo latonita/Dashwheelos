@@ -157,8 +157,9 @@
     <string name="design_level_meter">Medidor de nível</string>
     <string name="design_level_meter_desc">Colunas de LED a saltar com o nível.</string>
     <string name="design_elevation">Elevação</string>
-    <string name="design_elevation_desc">Altura da estrada nos últimos 40 km, com a altura atual.</string>
+    <string name="design_elevation_desc">Altura da estrada nos últimos 100 km, com a altura atual.</string>
     <string name="design_elevation_span">Últimos %1$s</string>
+    <string name="design_elevation_span_part">Últimos %1$s de %2$s</string>
     <string name="design_elevation_hint">Conduza um quilómetro para desenhar o perfil</string>
     <string name="design_filter_cells">Células do filtro</string>
     <string name="design_filter_cells_desc">A colmeia do filtro de partículas; a fuligem enche uma célula por viagem curta.</string>

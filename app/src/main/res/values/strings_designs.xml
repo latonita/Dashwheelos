@@ -157,8 +157,9 @@
     <string name="design_level_meter">Level meter</string>
     <string name="design_level_meter_desc">LED columns bouncing with the level.</string>
     <string name="design_elevation">Elevation</string>
-    <string name="design_elevation_desc">Height of the road over the last 40 km, with the height now.</string>
+    <string name="design_elevation_desc">Height of the road over the last 100 km, with the height now.</string>
     <string name="design_elevation_span">Last %1$s</string>
+    <string name="design_elevation_span_part">Last %1$s of %2$s</string>
     <string name="design_elevation_hint">Drive a kilometre to draw the profile</string>
     <string name="design_filter_cells">Filter cells</string>
     <string name="design_filter_cells_desc">The particle filter\'s honeycomb; soot fills a cell per short trip.</string>

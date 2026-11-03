@@ -1,7 +1,25 @@
 package com.openauto.dash
 
+/** The zoom of the elevation chart: how many of the newest kilometres it shows. */
+internal object ElevationZoom {
+    val STEPS_KM = listOf(10, 50, 100)
+    const val DEFAULT_KM = 10
+
+    /** The zoom after [km] in the cycle 10 -> 50 -> 100 -> 10; anything unknown goes to the default. */
+    fun next(km: Int): Int {
+        val i = STEPS_KM.indexOf(km)
+        return if (i < 0) DEFAULT_KM else STEPS_KM[(i + 1) % STEPS_KM.size]
+    }
+
+    /** A saved zoom, or the default when it is not one of the steps. */
+    fun valid(km: Int): Int = if (km in STEPS_KM) km else DEFAULT_KM
+
+    /** The newest points of [points] (one per 100 m) that fall in the last [km] kilometres. */
+    fun window(points: List<Float>, km: Int): List<Float> = points.takeLast((km * 1000.0 / ElevationTrack.STEP_M).toInt())
+}
+
 /**
- * The height of the road over the last [CAP_M] of driving, one point per [STEP_M], newest last.
+ * The height of the road over the last [CAP_M] (100 km) of driving, one point per [STEP_M], newest last.
  * Pure logic (no Android types) behind [ElevationRecorder]; see ElevationTrackTest.
  *
  * Distance, not time, is the axis: a stop adds no points, and a slow climb is as long on the chart as a fast one.
@@ -56,7 +74,7 @@ internal class ElevationTrack(points: List<Float> = emptyList(), private var sin
 
     companion object {
         const val STEP_M = 100.0
-        const val CAP_M = 40_000.0
+        const val CAP_M = 100_000.0
         const val MAX_POINTS = (CAP_M / STEP_M).toInt()
         const val MIN_STEP_M = 2.0
         const val GAP_M = 500.0

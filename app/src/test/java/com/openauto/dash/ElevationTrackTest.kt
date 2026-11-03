@@ -24,14 +24,14 @@ class ElevationTrackTest {
         assertEquals(2, t.points.size)
     }
 
-    @Test fun cappedAtFortyKilometres() {
+    @Test fun cappedAtAHundredKilometres() {
         val t = ElevationTrack()
-        repeat(1000) { t.add(100.0, it.toDouble()) }
+        repeat(2000) { t.add(100.0, it.toDouble()) }
         assertEquals(ElevationTrack.MAX_POINTS, t.points.size)
-        assertEquals(400, t.points.size)
+        assertEquals(1000, t.points.size)
         // The newest are kept: the last height is the last stored.
-        assertTrue(t.points.last() >= 995f)
-        assertTrue(t.points.first() >= 590f)
+        assertTrue(t.points.last() >= 1995f)
+        assertTrue(t.points.first() >= 990f)
     }
 
     @Test fun stationaryJitterIsIgnored() {
@@ -75,5 +75,43 @@ class ElevationTrackTest {
             assertTrue(s.toString(), ElevationTrack.fromString(s).points.isEmpty())
         }
         assertTrue(ElevationTrack.fromString(ElevationTrack().encode()).points.isEmpty())
+    }
+
+    @Test fun anOldFourHundredPointTrackStillLoads() {
+        val old = "v1;12.0;" + (0 until 400).joinToString(",") { (1000 + it).toString() }
+        val t = ElevationTrack.fromString(old)
+        assertEquals(400, t.points.size)
+        assertEquals(100f, t.points.first(), 0.01f)
+        // It keeps growing towards the larger cap.
+        repeat(100) { t.add(100.0, 150.0) }
+        assertEquals(500, t.points.size)
+    }
+
+    @Test fun aThousandPointsRoundTrip() {
+        val t = ElevationTrack()
+        repeat(1000) { t.add(100.0, 200.0 + (it % 50)) }
+        val back = ElevationTrack.fromString(t.encode())
+        assertEquals(1000, back.points.size)
+        assertEquals(t.points, back.points)
+    }
+
+    @Test fun zoomCyclesTenFiftyHundred() {
+        assertEquals(50, ElevationZoom.next(10))
+        assertEquals(100, ElevationZoom.next(50))
+        assertEquals(10, ElevationZoom.next(100))
+        assertEquals(10, ElevationZoom.next(7))
+        assertEquals(10, ElevationZoom.valid(7))
+        assertEquals(50, ElevationZoom.valid(50))
+    }
+
+    @Test fun zoomWindowTakesTheNewestKilometres() {
+        val pts = (0 until 1000).map { it.toFloat() }
+        assertEquals(100, ElevationZoom.window(pts, 10).size)
+        assertEquals(999f, ElevationZoom.window(pts, 10).last(), 0f)
+        assertEquals(900f, ElevationZoom.window(pts, 10).first(), 0f)
+        assertEquals(500, ElevationZoom.window(pts, 50).size)
+        assertEquals(1000, ElevationZoom.window(pts, 100).size)
+        // Less history than the zoom: what there is.
+        assertEquals(62, ElevationZoom.window(pts.take(62), 50).size)
     }
 }

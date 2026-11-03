@@ -21,6 +21,17 @@ object ElevationRecorder {
     /** The recorded heights in metres, oldest first; changes once per 100 m driven. */
     val profile: StateFlow<List<Float>> = _profile
 
+    private val _zoomKm = MutableStateFlow(ElevationZoom.DEFAULT_KM)
+
+    /** How many of the newest kilometres the chart shows ([ElevationZoom]); kept across restarts. */
+    val zoomKm: StateFlow<Int> = _zoomKm
+
+    /** The tap on the chart: the next zoom, saved. */
+    fun cycleZoom() {
+        _zoomKm.value = ElevationZoom.next(_zoomKm.value)
+        prefs?.edit()?.putInt(KEY_ZOOM, _zoomKm.value)?.apply()
+    }
+
     @Volatile private var prefs: android.content.SharedPreferences? = null
     private var current = ElevationTrack()
     private var dirty = false
@@ -33,6 +44,7 @@ object ElevationRecorder {
         prefs = p
         current = ElevationTrack.fromString(p.getString(KEY, null))
         _profile.value = current.points
+        _zoomKm.value = ElevationZoom.valid(p.getInt(KEY_ZOOM, ElevationZoom.DEFAULT_KM))
     }
 
     /** A GPS fix [l] after [prev], the one before it. */
@@ -60,6 +72,7 @@ object ElevationRecorder {
 
     private const val PREFS = "elevation_track"
     private const val KEY = "track"
+    private const val KEY_ZOOM = "zoom_km"
     private const val MAX_ACCURACY_M = 30f
     private const val MAX_VERTICAL_M = 30f
     private const val SAVE_MS = 30_000L

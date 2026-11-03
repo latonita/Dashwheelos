@@ -157,8 +157,9 @@
     <string name="design_level_meter">Indicatore di livello</string>
     <string name="design_level_meter_desc">Colonne LED che saltano con il livello.</string>
     <string name="design_elevation">Altitudine</string>
-    <string name="design_elevation_desc">Altezza della strada negli ultimi 40 km, con l’altitudine attuale.</string>
+    <string name="design_elevation_desc">Altezza della strada negli ultimi 100 km, con l’altitudine attuale.</string>
     <string name="design_elevation_span">Ultimi %1$s</string>
+    <string name="design_elevation_span_part">Ultimi %1$s su %2$s</string>
     <string name="design_elevation_hint">Percorri un chilometro per tracciare il profilo</string>
     <string name="design_filter_cells">Celle del filtro</string>
     <string name="design_filter_cells_desc">Il nido d\'ape del FAP; la fuliggine riempie una cella per tragitto breve.</string>

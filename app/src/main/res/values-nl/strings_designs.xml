@@ -157,8 +157,9 @@
     <string name="design_level_meter">Niveaumeter</string>
     <string name="design_level_meter_desc">Ledkolommen die meespringen met het niveau.</string>
     <string name="design_elevation">Hoogteprofiel</string>
-    <string name="design_elevation_desc">Hoogte van de weg over de laatste 40 km, met de huidige hoogte.</string>
+    <string name="design_elevation_desc">Hoogte van de weg over de laatste 100 km, met de huidige hoogte.</string>
     <string name="design_elevation_span">Laatste %1$s</string>
+    <string name="design_elevation_span_part">Laatste %1$s van %2$s</string>
     <string name="design_elevation_hint">Rijd een kilometer om het profiel te tekenen</string>
     <string name="design_filter_cells">Filtercellen</string>
     <string name="design_filter_cells_desc">De honingraat van het roetfilter; roet vult een cel per korte rit.</string>
