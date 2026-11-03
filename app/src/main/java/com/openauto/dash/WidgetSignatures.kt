@@ -1460,7 +1460,8 @@ private fun Elevation(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
     Stack(f, look, m, foot = {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(m.dp(3f))) {
             FaceText(e.now, look, m.sp(min(m.h * 0.18f, m.w * 0.12f)), Modifier.weight(1f, fill = false), weight = FontWeight.ExtraBold, fit = true)
-            Box(Modifier.weight(1f), contentAlignment = Alignment.BottomEnd) { FaceText(e.caption, look, m.caption, color = look.dim, align = TextAlign.End) }
+            // The no-chart hint is drawn once, in the middle of the chart area; the span caption is for a chart.
+            if (e.points != null) Box(Modifier.weight(1f), contentAlignment = Alignment.BottomEnd) { FaceText(e.caption, look, m.caption, color = look.dim, align = TextAlign.End, fit = true) }
         }
     }) {
         val pts = e.points
