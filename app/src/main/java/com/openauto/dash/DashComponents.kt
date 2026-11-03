@@ -339,12 +339,22 @@ internal fun Bitmap.averageColor(): Color = runCatching {
 internal fun Context.launchSafely(intent: Intent): Boolean =
     runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
 
+private fun debugEmuMapOverride(): Boolean = runCatching {
+    val get = Class.forName("android.os.SystemProperties").getMethod("get", String::class.java, String::class.java)
+    get.invoke(null, "debug.dash.emumap", "") == "1"
+}.getOrDefault(false)
+
 /**
- * True on an Android emulator. The GL-heavy MapLibre map tile crashes natively
+ * True on an Android emulator. The GL-heavy MapLibre map tile crashed natively
  * on the emulator's software renderer, so it shows a placeholder there;
  * everything else stays testable on an AVD.
+ *
+ * Debug builds can opt out with `adb shell setprop debug.dash.emumap 1`: this
+ * is for a host-GPU AVD (`-gpu host`), where the real map renders. If the
+ * property can't be read, the guard behaves as usual.
  */
 internal val isEmulator: Boolean by lazy {
+    if (BuildConfig.DEBUG && debugEmuMapOverride()) return@lazy false
     val fp = android.os.Build.FINGERPRINT.lowercase()
     val model = android.os.Build.MODEL.lowercase()
     val product = android.os.Build.PRODUCT.lowercase()
