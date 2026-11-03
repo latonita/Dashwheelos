@@ -156,6 +156,10 @@
     <string name="design_volume_knob_desc">Recézett forgatógomb világító skálával.</string>
     <string name="design_level_meter">Szintmérő</string>
     <string name="design_level_meter_desc">LED-oszlopok, amelyek a szinttel együtt ugrálnak.</string>
+    <string name="design_elevation">Magasság</string>
+    <string name="design_elevation_desc">Az út magassága az utolsó 40 km-en, plusz a jelenlegi magasság.</string>
+    <string name="design_elevation_span">Utolsó %1$s</string>
+    <string name="design_elevation_hint">Menj egy kilométert, és megjelenik a profil</string>
     <string name="design_filter_cells">Szűrőcellák</string>
     <string name="design_filter_cells_desc">A részecskeszűrő méhsejtje; rövid utanként egy cella telik meg korommal.</string>
     <string name="design_hourglass">Homokóra</string>

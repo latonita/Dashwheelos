@@ -156,6 +156,10 @@
     <string name="design_volume_knob_desc">Un mando moleteado con escala iluminada.</string>
     <string name="design_level_meter">Vúmetro</string>
     <string name="design_level_meter_desc">Columnas de LED que saltan con el nivel.</string>
+    <string name="design_elevation">Elevación</string>
+    <string name="design_elevation_desc">Altura de la carretera en los últimos 40 km, con la altura actual.</string>
+    <string name="design_elevation_span">Últimos %1$s</string>
+    <string name="design_elevation_hint">Conduce un kilómetro para dibujar el perfil</string>
     <string name="design_filter_cells">Celdas del filtro</string>
     <string name="design_filter_cells_desc">El panal del filtro de partículas; el hollín llena una celda por trayecto corto.</string>
     <string name="design_hourglass">Reloj de arena</string>

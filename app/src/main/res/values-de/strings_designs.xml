@@ -156,6 +156,10 @@
     <string name="design_volume_knob_desc">Ein geriffelter Drehknopf mit leuchtender Skala.</string>
     <string name="design_level_meter">Pegelanzeige</string>
     <string name="design_level_meter_desc">LED-Säulen, die mit dem Pegel hüpfen.</string>
+    <string name="design_elevation">Höhenprofil</string>
+    <string name="design_elevation_desc">Höhe der Strecke auf den letzten 40 km, dazu die aktuelle Höhe.</string>
+    <string name="design_elevation_span">Letzte %1$s</string>
+    <string name="design_elevation_hint">Fahr einen Kilometer, dann erscheint das Profil</string>
     <string name="design_filter_cells">Filterzellen</string>
     <string name="design_filter_cells_desc">Die Waben des Partikelfilters; Ruß füllt eine Zelle pro Kurzstrecke.</string>
     <string name="design_hourglass">Sanduhr</string>

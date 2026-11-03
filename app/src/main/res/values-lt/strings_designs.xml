@@ -158,6 +158,10 @@
     <string name="design_volume_knob_desc">Rifliuota sukama rankenėlė su apšviesta skale.</string>
     <string name="design_level_meter">Lygio matuoklis</string>
     <string name="design_level_meter_desc">LED stulpeliai šokinėja pagal lygį.</string>
+    <string name="design_elevation">Aukštis</string>
+    <string name="design_elevation_desc">Kelio aukštis per pastaruosius 40 km ir dabartinis aukštis.</string>
+    <string name="design_elevation_span">Paskutiniai %1$s</string>
+    <string name="design_elevation_hint">Pravažiuokite kilometrą, kad atsirastų profilis</string>
     <string name="design_filter_cells">Filtro korys</string>
     <string name="design_filter_cells_desc">Kietųjų dalelių filtro korys; suodžiai užpildo akutę kiekvienai trumpai kelionei.</string>
     <string name="design_hourglass">Smėlio laikrodis</string>

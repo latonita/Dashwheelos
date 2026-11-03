@@ -107,16 +107,31 @@ internal fun gpsStatusFace(): WidgetFace {
     val (seen, used) = rememberSatellites(perm.granted)
     val location by LocationFeed.location.collectAsState()
     val units by Units.current.collectAsState()
+    val profile by ElevationRecorder.profile.collectAsState()
     val loc = location
+    val altitude = loc?.takeIf { it.hasAltitude() }?.let { units.shortDistance(it.altitude) } ?: NO_READING
+    val history = profile.size * ElevationTrack.STEP_M
+    val enough = history >= ENOUGH_ELEVATION_M
+    val elevation = FaceElevation(
+        points = profile.takeIf { enough },
+        now = altitude,
+        min = if (enough) units.shortDistance(profile.min().toDouble()) else "",
+        max = if (enough) units.shortDistance(profile.max().toDouble()) else "",
+        caption = if (enough) stringResource(R.string.design_elevation_span, units.shortDistance(history)) else stringResource(R.string.design_elevation_hint)
+    )
     return WidgetFace(
         icon = if (loc != null) Icons.Filled.GpsFixed else Icons.Filled.GpsNotFixed,
         title = BuiltinKind.GPS_STATUS.label,
         value = "$used/$seen",
         caption = loc?.takeIf { it.hasAccuracy() }?.let { "± ${units.shortDistance(it.accuracy.toDouble())}" } ?: stringResource(R.string.widgets_gps_no_fix),
         fraction = (used / 12f).coerceIn(0f, 1f),
+        elevation = elevation,
         stats = listOf(
-            FaceStat(stringResource(R.string.widgets_gps_altitude), loc?.takeIf { it.hasAltitude() }?.let { units.shortDistance(it.altitude) } ?: "--"),
+            FaceStat(stringResource(R.string.widgets_gps_altitude), altitude),
             FaceStat(stringResource(R.string.widgets_gps_speed), loc?.takeIf { it.hasSpeed() }?.let { "${units.speed(it.speed * 3.6f)}" } ?: "--")
         )
     )
 }
+
+/** Under this much history the elevation design shows a hint instead of a chart. */
+private const val ENOUGH_ELEVATION_M = 1_000.0

@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -240,6 +241,7 @@ internal fun SignatureFace(face: WidgetFace, design: WidgetDesign, modifier: Mod
                 WidgetDesign.COVER_ART -> CoverArt(f, look, m)
                 WidgetDesign.VOLUME_KNOB -> VolumeKnob(f, look, m)
                 WidgetDesign.LEVEL_METER -> LevelMeter(f, look, m)
+                WidgetDesign.ELEVATION -> Elevation(f, look, m)
                 WidgetDesign.FILTER_CELLS -> FilterCells(f, look, m)
                 WidgetDesign.HOURGLASS -> Hourglass(f, look, m)
                 WidgetDesign.LEAF -> Leaf(f, look, m)
@@ -1448,6 +1450,49 @@ private fun LevelMeter(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
             }
         }
     }
+}
+
+@Composable
+private fun Elevation(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
+    val e = f.elevation ?: return
+    Stack(f, look, m, foot = {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(m.dp(3f))) {
+            FaceText(e.now, look, m.sp(min(m.h * 0.18f, m.w * 0.12f)), Modifier.weight(1f, fill = false), weight = FontWeight.ExtraBold, fit = true)
+            Box(Modifier.weight(1f), contentAlignment = Alignment.BottomEnd) { FaceText(e.caption, look, m.caption, color = look.dim, align = TextAlign.End) }
+        }
+    }) {
+        val pts = e.points
+        if (pts == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { FaceText(e.caption, look, m.caption, color = look.dim, align = TextAlign.Center, maxLines = 3) }
+        } else {
+            Box(Modifier.fillMaxSize()) {
+                Canvas(Modifier.fillMaxSize()) { drawProfile(pts, look) }
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    FaceText(e.max, look, m.label, color = look.dim)
+                    FaceText(e.min, look, m.label, color = look.dim)
+                }
+            }
+        }
+    }
+}
+
+/** The line of [pts] (metres, oldest first; the newest at the right) over a faint fill, with a dot on the newest. */
+private fun DrawScope.drawProfile(pts: List<Float>, look: FaceLook) {
+    if (pts.size < 2) return
+    val lo = pts.min()
+    // At least 20 m of scale, so a flat road stays flat instead of magnifying GPS noise.
+    val span = max(pts.max() - lo, 20f)
+    val pad = size.height * 0.08f
+    val h = size.height - 2f * pad
+    val stroke = max(1.5f, size.height * 0.022f)
+    fun x(i: Int) = size.width * i / (pts.size - 1)
+    fun y(v: Float) = pad + h * (1f - (v - lo) / span)
+    val line = Path().apply { pts.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) } }
+    val area = Path().apply { addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
+    for (k in 0..2) drawLine(look.track, Offset(0f, pad + h * k / 2f), Offset(size.width, pad + h * k / 2f), 1f)
+    drawPath(area, Brush.verticalGradient(listOf(look.accent.copy(alpha = 0.35f), look.accent.copy(alpha = 0.02f))))
+    drawPath(line, look.accent, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawCircle(look.accent, stroke * 2f, Offset(size.width, y(pts.last())))
 }
 
 // --- Car care --------------------------------------------------------------------------------------------

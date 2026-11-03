@@ -165,6 +165,7 @@ object LocationFeed {
         if (refs++ > 0) return true
         manager = lm
         restoreHeading(context)
+        ElevationRecorder.restore(context)
         runCatching {
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())
         }
@@ -183,6 +184,7 @@ object LocationFeed {
         refs = 0
         manager?.removeUpdates(listener)
         manager = null
+        ElevationRecorder.save(force = true)
         main.removeCallbacks(expire)
         setFreshSpeed(null)
     }
@@ -299,6 +301,7 @@ object LocationFeed {
         val speedKmh = l.speed * 3.6f
         if (!gps) return
         trackHeading(l, speedKmh)
+        ElevationRecorder.onFix(prev, l)
 
         // Only consecutive GPS fixes of decent accuracy count towards the trip.
         if (prev != null && l.accuracy <= 30f) {
