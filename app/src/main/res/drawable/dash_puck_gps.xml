@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The moving puck: the stationary dot (14 dp in a 22 dp white ring, MapLibre's own) with a heading
+     arrow over the top of the ring. The library's GPS puck is 75 dp, which looked like a big circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14,14m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0" />
+    <path
+        android:fillColor="#4A90E2"
+        android:pathData="M14,14m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0" />
+    <path
+        android:fillColor="#4A90E2"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M14,0.5L19,7L9,7Z" />
+</vector>

@@ -800,6 +800,9 @@ private fun puckOptions(context: Context, accent: Color): LocationComponentOptio
         .foregroundTintColor(argb)
         .bearingTintColor(argb)
         .accuracyColor(argb)
+        // Moving, the component swaps to its GPS puck (75 dp, a big white disc); ours is the
+        // stationary dot's size with a heading arrow.
+        .gpsDrawable(R.drawable.dash_puck_gps)
         .build()
 }
 
