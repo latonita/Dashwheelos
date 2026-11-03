@@ -8,7 +8,7 @@ import java.util.Locale
 /**
  * A station: [freq] in the radio's 10 kHz units (9850 = 98.5 MHz); [name] empty when none is known.
  */
-data class RadioStation(val freq: Int, val name: String, val pi: String = "") {
+data class RadioStation(val freq: Int, val name: String, val pi: String = "", val freqs: List<Int> = emptyList()) {
     val mhz: String get() = String.format(Locale.ROOT, "%.1f", freq / 100.0)
 }
 
@@ -73,6 +73,8 @@ interface StockRadio {
     fun remove(context: Context, station: RadioStation) = Unit
     /** Gives [station] the driver's own [name] (blank clears it). */
     fun rename(context: Context, station: RadioStation, name: String) = Unit
+    /** Drops [freq] from [station] (the station too when it was its last one). */
+    fun removeFrequency(context: Context, station: RadioStation, freq: Int) = Unit
 
     /** The name the driver gave [station] (not the one it broadcasts); what a rename starts from. */
     fun ownName(station: RadioStation): String = station.name

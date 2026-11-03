@@ -42,6 +42,7 @@
     <string name="widgets_radio_empty_add">Dotknij +, aby zapisać aktualną stację</string>
     <string name="widgets_radio_remove">Usuń</string>
     <string name="widgets_radio_rename">Zmień nazwę</string>
+    <string name="widgets_radio_frequencies">Częstotliwości</string>
     <string name="widgets_hw_home">Dom</string>
     <string name="widgets_hw_work">Praca</string>
     <string name="widgets_hw_empty">Ustaw Dom i Pracę w Ustawieniach, Jazda, Miejsca</string>

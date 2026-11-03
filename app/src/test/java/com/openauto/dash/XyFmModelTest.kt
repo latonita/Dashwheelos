@@ -376,4 +376,117 @@ class XyFmModelTest {
     fun pi_renameKeepsThePi() {
         assertEquals("3033", FmStations().add(9940, "A", pi = "3033").rename(9940, "B").piOf(9940))
     }
+
+    // --- Stations of several frequencies, joined by PI ---------------------------------------------------
+
+    private fun freqsOf(l: FmStations) = l.stations.map { it.freqs }
+
+    @Test
+    fun group_plusJoinsTheStationWithTheSamePi() {
+        val l = FmStations().add(9940, "PLAY", pi = "3033").add(10_460, "PLAY", pi = "3033")
+        assertEquals(listOf(listOf(9940, 10_460)), freqsOf(l))
+        assertEquals(10_460, l.stations[0].last)
+        assertEquals("PLAY", l.nameOf(10_460))
+        assertEquals(10_460, l.shown()[0].freq)
+        assertEquals(listOf(9940, 10_460), l.shown()[0].freqs)
+    }
+
+    @Test
+    fun group_noPiOrADifferentPiMakesANewStation() {
+        val l = FmStations().add(9940, "A", pi = "3033").add(10_460, "A").add(10_700, "A", pi = "3034")
+        assertEquals(listOf(listOf(9940), listOf(10_460), listOf(10_700)), freqsOf(l))
+        assertEquals(listOf(listOf(9940)), freqsOf(FmStations().add(9940, "A", pi = "3033").add(9940, "B", pi = "3033")))
+    }
+
+    @Test
+    fun group_aPiThatFillsInLaterMakesAJoinTargetButNeverMergesByItself() {
+        val l = FmStations().add(9940, "A").add(10_460, "A", pi = "3033")
+        val f = l.fillPi(9940, "3033")
+        assertEquals(listOf(listOf(9940), listOf(10_460)), freqsOf(f))
+        val j = f.add(10_700, "A", pi = "3033")
+        assertEquals(listOf(listOf(9940, 10_700), listOf(10_460)), freqsOf(j))
+    }
+
+    @Test
+    fun group_canAddJoinsEvenWhenTheTileIsFull() {
+        val full = (0 until StockRadio.SHOWN).fold(FmStations()) { l, i -> l.add(9000 + i * 10, "", pi = "30%02d".format(i)) }
+        assertFalse(full.canAdd(10_700, pi = "9999"))
+        assertTrue(full.canAdd(10_700, pi = "3003"))
+        assertTrue(canSaveStation(full.shown(), RadioStation(10_700, "", "3003")))
+        assertFalse(canSaveStation(full.shown(), RadioStation(10_700, "", "9999")))
+        assertFalse(canSaveStation(full.shown(), RadioStation(9000, "", "3000")))
+    }
+
+    @Test
+    fun tap_firstTunesTheLastUsedThenRotatesWithWrapAround() {
+        val l = FmStations().add(9940, "A", pi = "3033").add(10_460, "A", pi = "3033").add(10_700, "A", pi = "3033").played(10_460)
+        assertEquals(10_460, l.tapTarget(9940, null))
+        assertEquals(10_460, l.tapTarget(10_700, 8820))
+        assertEquals(10_700, l.tapTarget(10_460, 10_460))
+        assertEquals(9940, l.tapTarget(10_460, 10_700))
+        assertEquals(10_460, l.tapTarget(10_460, 9940))
+        assertEquals(8820, l.tapTarget(8820, null))
+        assertEquals(9940, FmStations().add(9940, "A").tapTarget(9940, 9940))
+    }
+
+    @Test
+    fun tap_lastUsedFollowsWhatPlaysAndOnlyInItsStation() {
+        val l = FmStations().add(9940, "A", pi = "3033").add(10_460, "A", pi = "3033").add(8820, "B")
+        assertEquals(10_460, l.stations[0].last)
+        val p = l.played(9940)
+        assertEquals(9940, p.stations[0].last)
+        assertEquals(8820, p.stations[1].last)
+        assertTrue(p.played(9940) === p)
+        assertTrue(p.played(10_000) === p)
+    }
+
+    @Test
+    fun group_frequenciesDialogRemovesOneThenTheStationWithTheLast() {
+        val l = FmStations().add(9940, "A", pi = "3033").add(10_460, "A", pi = "3033").add(8820, "B")
+        val one = l.removeFreq(10_460)
+        assertEquals(listOf(listOf(9940), listOf(8820)), freqsOf(one))
+        assertEquals(9940, one.stations[0].last)
+        val none = one.removeFreq(9940)
+        assertEquals(listOf(listOf(8820)), freqsOf(none))
+        assertTrue(one.removeFreq(1234) === one)
+        assertEquals(9940, l.played(9940).removeFreq(10_460).stations[0].last)
+    }
+
+    @Test
+    fun group_renameAndRemoveActOnTheWholeStation() {
+        val l = FmStations().add(9940, "A", pi = "3033").add(10_460, "A", pi = "3033").add(8820, "B")
+        val r = l.rename(10_460, "Radio")
+        assertEquals("Radio", r.nameOf(9940))
+        assertEquals("B", r.nameOf(8820))
+        assertEquals(listOf(listOf(8820)), freqsOf(r.remove(9940)))
+    }
+
+    @Test
+    fun group_storageRoundTripIsLossless() {
+        val l = FmStations().add(9940, "PLAY", pi = "3033").add(8820, "Old").add(10_460, "PLAY", pi = "3033").add(10_700, "").played(9940)
+        val back = FmStations.parse(l.serialize(), pis = l.serializePis(), groups = l.serializeGroups())
+        assertEquals(l.stations, back.stations)
+        assertEquals("9940\t10460\t9940", l.serializeGroups().replace(",", "\t"))
+    }
+
+    @Test
+    fun group_anOldBuildSeesEveryFrequencyAsAPresetAndLosesNothing() {
+        val l = FmStations().add(9940, "PLAY", pi = "3033").add(8820, "Old").add(10_460, "PLAY", pi = "3033")
+        // What the stations text holds is what an old build reads: 2-field lines, one per frequency.
+        assertEquals("9940\tPLAY\n10460\tPLAY\n8820\tOld", l.serialize())
+        val old = FmStations.parse(l.serialize())
+        assertEquals(listOf(9940, 10_460, 8820), old.entries.map { it.freq })
+        assertEquals(3, old.stations.size)
+        // And without the groups text nothing merges, even when the PIs are the same.
+        assertEquals(3, FmStations.parse(l.serialize(), pis = l.serializePis()).stations.size)
+    }
+
+    @Test
+    fun group_damagedGroupLinesAreIgnored() {
+        val text = "9940\tA\n10460\tA\n8820\tB"
+        assertEquals(3, FmStations.parse(text, groups = "9940,7777\t9940\nzz\t1\n8820,7777\t8820").stations.size)
+        val g = FmStations.parse(text, groups = "9940,10460\t5555")
+        assertEquals(listOf(listOf(9940, 10_460), listOf(8820)), freqsOf(g))
+        assertEquals(9940, g.stations[0].last)
+    }
 }

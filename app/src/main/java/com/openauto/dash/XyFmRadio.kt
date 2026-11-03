@@ -57,6 +57,7 @@ internal object XyFmRadio : StockRadio {
     private const val KEY_RDS_NAMES = "rds_names"
     private const val KEY_RDS_PI = "rds_pi"
     private const val KEY_STATION_PI = "station_pi"
+    private const val KEY_STATION_GROUPS = "station_groups"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
@@ -113,7 +114,7 @@ internal object XyFmRadio : StockRadio {
         if (users++ > 0) return
         app = a
         val prefs = prefs(a)
-        saved = FmStations.parse(prefs.getString(KEY_STATIONS, null), pis = prefs.getString(KEY_STATION_PI, null))
+        saved = FmStations.parse(prefs.getString(KEY_STATIONS, null), pis = prefs.getString(KEY_STATION_PI, null), groups = prefs.getString(KEY_STATION_GROUPS, null))
         heardPi = FmPis.parse(prefs.getString(KEY_RDS_PI, null))
         learned = FmLearned.parse(prefs.getString(KEY_RDS_NAMES, null))
         _stations.value = shownStations()
@@ -135,7 +136,26 @@ internal object XyFmRadio : StockRadio {
     /** The names stations broadcast, as the radio's session told them. */
     private var learned = FmLearned()
 
-    private fun shownStations(): List<RadioStation> = saved.entries.map { RadioStation(it.freq, fmDisplayName(it.name, learned.nameOf(it.freq)), it.pi.ifEmpty { heardPi.piOf(it.freq) }) }
+    private fun shownStations(): List<RadioStation> = saved.stations.map {
+        RadioStation(it.last, fmDisplayName(it.name, learned.nameOf(it.last)), it.pi.ifEmpty { heardPi.piOf(it.last) }, it.freqs)
+    }
+
+    /** Writes the driver's list: the lines, the PI of each, and which lines are one station. */
+    private fun persist() {
+        app?.let {
+            prefs(it).edit().putString(KEY_STATIONS, saved.serialize()).putString(KEY_STATION_PI, saved.serializePis())
+                .putString(KEY_STATION_GROUPS, saved.serializeGroups()).apply()
+        }
+    }
+
+    /** [freq] plays: it is the last one of its station. */
+    private fun touch(freq: Int) {
+        val next = saved.played(freq)
+        if (next === saved) return
+        saved = next
+        persist()
+        _stations.value = shownStations()
+    }
 
     override fun ownName(station: RadioStation): String = saved.nameOf(station.freq)
 
@@ -147,15 +167,13 @@ internal object XyFmRadio : StockRadio {
         val freq = parseFmMediaId(mediaId) ?: return
         val names = learned.learn(freq, title)
         val pis = heardPi.learn(freq, pi)
-        val filled = saved.fillPi(freq, pi)
+        val filled = saved.fillPi(freq, pi).played(freq)
         if (names === learned && pis === heardPi && filled === saved) return
         learned = names
         heardPi = pis
         saved = filled
-        app?.let {
-            prefs(it).edit().putString(KEY_RDS_NAMES, learned.serialize()).putString(KEY_RDS_PI, heardPi.serialize())
-                .putString(KEY_STATION_PI, saved.serializePis()).apply()
-        }
+        persist()
+        app?.let { prefs(it).edit().putString(KEY_RDS_NAMES, learned.serialize()).putString(KEY_RDS_PI, heardPi.serialize()).apply() }
         _stations.value = shownStations()
         _playing.value = _playing.value?.let { named(it.freq) }
         tell()
@@ -173,13 +191,14 @@ internal object XyFmRadio : StockRadio {
     private fun note(freq: Int) {
         _playing.value = named(freq)
         app?.let { prefs(it).edit().putInt(KEY_LAST, freq).apply() }
+        touch(freq)
     }
 
     private fun edit(change: (FmStations) -> FmStations) {
         saved = change(saved)
         _stations.value = shownStations()
         _playing.value = _playing.value?.let { named(it.freq) }
-        app?.let { prefs(it).edit().putString(KEY_STATIONS, saved.serialize()).putString(KEY_STATION_PI, saved.serializePis()).apply() }
+        persist()
     }
 
     override fun add(context: Context, station: RadioStation) = edit { it.add(station.freq, station.name, pi = station.pi.ifEmpty { heardPi.piOf(station.freq) }) }
@@ -187,6 +206,8 @@ internal object XyFmRadio : StockRadio {
     override fun remove(context: Context, station: RadioStation) = edit { it.remove(station.freq) }
 
     override fun rename(context: Context, station: RadioStation, name: String) = edit { it.rename(station.freq, name) }
+
+    override fun removeFrequency(context: Context, station: RadioStation, freq: Int) = edit { it.removeFreq(freq) }
 
     // --- Is it playing -----------------------------------------------------
 
@@ -220,13 +241,19 @@ internal object XyFmRadio : StockRadio {
 
     // --- Orders --------------------------------------------------------------
 
+    /**
+     * A tap on a preset: its last used frequency, or, while the preset is what plays, the next of its frequencies.
+     * A station with no list (the media tile's) is tuned as it is.
+     */
     override fun tune(context: Context, station: RadioStation) {
-        val fm = fmExtra(station.freq) ?: return
+        val freq = if (station.freqs.size > 1) saved.tapTarget(station.freq, _playing.value?.freq) else station.freq
+        val fm = fmExtra(freq) ?: return
         val a = context.applicationContext
         if (alive) a.sendBroadcast(command(ACTION_TUNE).putExtra(EXTRA_FM, fm)) else open(a, fm)
         paused = false
         lastFreqAt = SystemClock.elapsedRealtime()
-        _playing.value = named(station.freq)
+        _playing.value = named(freq)
+        touch(freq)
         tell()
     }
 

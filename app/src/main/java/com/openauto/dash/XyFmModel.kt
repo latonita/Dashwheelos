@@ -100,52 +100,121 @@ internal fun pickSource(sessions: List<SessionView>, radioAlive: Boolean, radioF
 /** One station the driver saved: [freq] in 10 kHz units, [name] empty when none is known. */
 internal data class FmEntry(val freq: Int, val name: String = "", val pi: String = "")
 
+/** The most frequencies one station keeps. */
+internal const val FM_MAX_FREQS = 8
+
+/**
+ * A preset: a station with a [name] (empty when none), the RDS [pi] that tells it from others (empty when unknown), and
+ * the [freqs] it is heard on, in the order they were added; [last] is the one used last (always one of [freqs]).
+ */
+internal data class FmStation(val name: String, val pi: String, val freqs: List<Int>, val last: Int)
+
 /**
  * The stations the driver saved for the presets tile, in the order they were added (never reordered), at most
- * [StockRadio.SHOWN] and without duplicates. Nothing is learned from what the radio tunes: only [add] puts a station
- * in. The radio keeps its own presets private, so this is Dashwheel's own list.
- * Immutable: every change gives a new list, which [serialize]s to one line per station for the preferences.
+ * [StockRadio.SHOWN] and with no frequency twice. Nothing is learned from what the radio tunes: only [add] puts a
+ * frequency in, and it joins the station with the same PI when there is one. The radio keeps its own presets private,
+ * so this is Dashwheel's own list. Immutable: every change gives a new list.
+ *
+ * Stored so that an older build loses nothing: [serialize] writes every frequency as a line of its own (it shows
+ * them as separate presets), [serializePis] the PI of each, and [serializeGroups] which lines are one station.
  */
-internal class FmStations(val entries: List<FmEntry> = emptyList()) {
+internal class FmStations(val stations: List<FmStation> = emptyList()) {
 
-    fun contains(freq: Int): Boolean = entries.any { it.freq == freq }
+    /** One entry per frequency, station by station: how the old lines look. */
+    val entries: List<FmEntry> get() = stations.flatMap { s -> s.freqs.map { FmEntry(it, s.name, s.pi) } }
 
-    /** Whether [freq] could be [add]ed: FM, not saved yet, and there is room. */
-    fun canAdd(freq: Int, max: Int = StockRadio.SHOWN): Boolean = isFm(freq) && !contains(freq) && entries.size < max
+    private fun indexOf(freq: Int): Int = stations.indexOfFirst { freq in it.freqs }
 
-    /** [freq] saved after the others; the same list when it can't be ([canAdd]). */
-    fun add(freq: Int, name: String = "", max: Int = StockRadio.SHOWN, pi: String = ""): FmStations =
-        if (canAdd(freq, max)) FmStations(entries + FmEntry(freq, clean(name), parseFmPi(pi).orEmpty())) else this
+    fun contains(freq: Int): Boolean = indexOf(freq) >= 0
 
-    /** [pi] kept for the saved [freq] when it has none yet; never for another frequency, never over a PI it has. */
-    fun fillPi(freq: Int, pi: String?): FmStations {
-        val p = parseFmPi(pi) ?: return this
-        if (entries.none { it.freq == freq && it.pi.isEmpty() }) return this
-        return FmStations(entries.map { if (it.freq == freq) it.copy(pi = p) else it })
+    /** The station with [pi] (a valid one), or -1. */
+    private fun matching(pi: String): Int {
+        val p = parseFmPi(pi) ?: return -1
+        return stations.indexOfFirst { it.pi == p }
     }
 
-    fun piOf(freq: Int): String = entries.firstOrNull { it.freq == freq }?.pi.orEmpty()
-
-    /** [freq] saved under [name] (blank clears it); the same list when [freq] isn't saved. */
-    fun rename(freq: Int, name: String): FmStations =
-        if (!contains(freq)) this
-        else FmStations(entries.map { if (it.freq == freq) it.copy(name = clean(name).take(MAX_NAME)) else it })
-
-    fun remove(freq: Int): FmStations = FmStations(entries.filter { it.freq != freq })
-
-    /** The stations in the order shown. */
-    fun shown(): List<RadioStation> = entries.map { RadioStation(it.freq, it.name, it.pi) }
-
-    fun nameOf(freq: Int): String = entries.firstOrNull { it.freq == freq }?.name.orEmpty()
+    /** Whether [freq] could be [add]ed: FM, not saved yet, and there is room (or a station with its [pi] to join). */
+    fun canAdd(freq: Int, max: Int = StockRadio.SHOWN, pi: String = ""): Boolean {
+        if (!isFm(freq) || contains(freq)) return false
+        val m = matching(pi)
+        return if (m >= 0) stations[m].freqs.size < FM_MAX_FREQS else stations.size < max
+    }
 
     /**
-     * One "freq TAB name" line per station. The PI codes are NOT in these lines: an older build reads only 2-field
-     * (or 5-field) lines and would drop a 3-field one with the preset, so they have their own text ([serializePis]).
+     * [freq] saved: after the frequencies of the station with the same [pi] when there is one, else as a station of
+     * its own, after the others. The same list when it can't be ([canAdd]).
+     */
+    fun add(freq: Int, name: String = "", max: Int = StockRadio.SHOWN, pi: String = ""): FmStations {
+        if (!canAdd(freq, max, pi)) return this
+        val m = matching(pi)
+        if (m >= 0) return FmStations(stations.mapIndexed { i, s -> if (i == m) s.copy(freqs = s.freqs + freq, last = freq) else s })
+        return FmStations(stations + FmStation(clean(name), parseFmPi(pi).orEmpty(), listOf(freq), freq))
+    }
+
+    /** [pi] kept for the station of the saved [freq] when it has none yet; never over a PI it has, never for others. */
+    fun fillPi(freq: Int, pi: String?): FmStations {
+        val p = parseFmPi(pi) ?: return this
+        val at = indexOf(freq)
+        if (at < 0 || stations[at].pi.isNotEmpty()) return this
+        return FmStations(stations.mapIndexed { i, s -> if (i == at) s.copy(pi = p) else s })
+    }
+
+    fun piOf(freq: Int): String = stations.getOrNull(indexOf(freq))?.pi.orEmpty()
+
+    /** The station of [freq] named [name] (blank clears it); the same list when [freq] isn't saved. */
+    fun rename(freq: Int, name: String): FmStations {
+        val at = indexOf(freq)
+        if (at < 0) return this
+        return FmStations(stations.mapIndexed { i, s -> if (i == at) s.copy(name = clean(name).take(MAX_NAME)) else s })
+    }
+
+    /** The whole station of [freq] gone. */
+    fun remove(freq: Int): FmStations = FmStations(stations.filterNot { freq in it.freqs })
+
+    /** [freq] gone from its station; the station too when it was the last one. */
+    fun removeFreq(freq: Int): FmStations {
+        val at = indexOf(freq)
+        if (at < 0) return this
+        val s = stations[at]
+        val left = s.freqs - freq
+        if (left.isEmpty()) return remove(freq)
+        return FmStations(stations.mapIndexed { i, t -> if (i == at) s.copy(freqs = left, last = if (s.last == freq) left.first() else s.last) else t })
+    }
+
+    /** [freq] is what plays: it becomes the last one of its station. The same list when it already is, or isn't saved. */
+    fun played(freq: Int): FmStations {
+        val at = indexOf(freq)
+        if (at < 0 || stations[at].last == freq) return this
+        return FmStations(stations.mapIndexed { i, s -> if (i == at) s.copy(last = freq) else s })
+    }
+
+    /**
+     * What a tap on the station of [freq] tunes, while [playing] is what plays: the last one used when the station
+     * isn't playing; the next of its frequencies (the first after the end) when it is.
+     */
+    fun tapTarget(freq: Int, playing: Int?): Int {
+        val s = stations.getOrNull(indexOf(freq)) ?: return freq
+        val at = if (playing == null) -1 else s.freqs.indexOf(playing)
+        return if (at >= 0) s.freqs[(at + 1) % s.freqs.size] else s.last
+    }
+
+    /** The stations in the order shown, each at its last used frequency. */
+    fun shown(): List<RadioStation> = stations.map { RadioStation(it.last, it.name, it.pi, it.freqs) }
+
+    fun nameOf(freq: Int): String = stations.getOrNull(indexOf(freq))?.name.orEmpty()
+
+    /**
+     * One "freq TAB name" line per frequency. The PI codes and the grouping are NOT in these lines: an older build reads
+     * only 2-field (or 5-field) lines and would drop a longer one with the preset, so they have their own text.
      */
     fun serialize(): String = entries.joinToString("\n") { "${it.freq}\t${it.name}" }
 
-    /** One "freq TAB PI" line per station that has a PI; read back by [parse]'s `pis`. */
+    /** One "freq TAB PI" line per frequency whose station has a PI; read back by [parse]'s `pis`. */
     fun serializePis(): String = entries.filter { it.pi.isNotEmpty() }.joinToString("\n") { "${it.freq}\t${it.pi}" }
+
+    /** One "f1,f2,f3 TAB last" line per station with more than one frequency; read back by [parse]'s `groups`. */
+    fun serializeGroups(): String =
+        stations.filter { it.freqs.size > 1 }.joinToString("\n") { "${it.freqs.joinToString(",")}\t${it.last}" }
 
     companion object {
         /** The longest name kept, in characters. */
@@ -156,11 +225,13 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
         private fun clean(name: String) = name.replace(BLANKS, " ").trim()
 
         /**
-         * The list [serialize]d, as far as it makes sense (a damaged line is dropped, so is anything beyond the cap).
+         * The lists [serialize]d, as far as they make sense (a damaged line is dropped, so is anything beyond the cap).
          * Also reads the older format, which learned every station heard ("freq, name, pin, heard, at" per line): only
-         * the pinned ones (the driver's own choice) are kept, in the order they were pinned.
+         * the pinned ones (the driver's own choice) are kept, in the order they were pinned. A line of [groups] joins
+         * frequencies that are all saved (the others are dropped from it); a frequency in two lines stays in the first.
+         * Without [groups] every line is a station: old data never merges by itself.
          */
-        fun parse(text: String?, max: Int = StockRadio.SHOWN, pis: String? = null): FmStations {
+        fun parse(text: String?, max: Int = StockRadio.SHOWN, pis: String? = null, groups: String? = null): FmStations {
             val pinned = ArrayList<Pair<Int, FmEntry>>()
             val saved = ArrayList<FmEntry>()
             for (line in text.orEmpty().lineSequence()) {
@@ -172,9 +243,37 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
                     5 -> p[2].toIntOrNull()?.takeIf { it > 0 }?.let { pinned += it to FmEntry(freq, clean(p[1])) }
                 }
             }
-            val all = pinned.sortedBy { it.first }.map { it.second } + saved
             val byFreq = FmPis.parse(pis).pis
-            return FmStations(all.distinctBy { it.freq }.take(max).map { if (it.pi.isEmpty()) it.copy(pi = byFreq[it.freq].orEmpty()) else it })
+            val flat = (pinned.sortedBy { it.first }.map { it.second } + saved).distinctBy { it.freq }
+                .map { if (it.pi.isEmpty()) it.copy(pi = byFreq[it.freq].orEmpty()) else it }
+            val known = flat.associateBy { it.freq }
+            // The group of each frequency, from the lines whose frequencies are saved.
+            val groupOf = HashMap<Int, Pair<List<Int>, Int>>()
+            for (line in groups.orEmpty().lineSequence()) {
+                val p = line.split('\t')
+                if (p.size != 2) continue
+                val freqs = p[0].split(',').mapNotNull { it.trim().toIntOrNull() }
+                    .filter { it in known && it !in groupOf }.distinct().take(FM_MAX_FREQS)
+                if (freqs.size < 2) continue
+                val last = p[1].trim().toIntOrNull()?.takeIf { it in freqs } ?: freqs.first()
+                freqs.forEach { groupOf[it] = freqs to last }
+            }
+            val out = ArrayList<FmStation>()
+            val done = HashSet<Int>()
+            for (e in flat) {
+                if (e.freq in done) continue
+                val g = groupOf[e.freq]
+                val members = g?.first ?: listOf(e.freq)
+                done += members
+                val named = members.map { known.getValue(it) }
+                out += FmStation(
+                    name = named.first().name,
+                    pi = named.firstOrNull { it.pi.isNotEmpty() }?.pi.orEmpty(),
+                    freqs = members,
+                    last = g?.second ?: e.freq
+                )
+            }
+            return FmStations(out.take(max))
         }
     }
 }

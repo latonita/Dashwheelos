@@ -121,9 +121,15 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                 }
                                 return@forEach
                             }
-                            val on = playing?.freq == s.freq
-                            var menu by remember(s.freq) { mutableStateOf(false) }
-                            var renaming by remember(s.freq) { mutableStateOf(false) }
+                            val freqs = s.freqs.ifEmpty { listOf(s.freq) }
+                            val on = playing?.freq in freqs
+                            // The frequency in use, else the one used last.
+                            val shown = playing?.freq?.takeIf { it in freqs } ?: s.freq
+                            val shownMhz = RadioStation(shown, "").mhz
+                            val mark = if (freqs.size > 1) (freqs.indexOf(shown) + 1).toString() + "/" + freqs.size else ""
+                            var menu by remember(freqs.first()) { mutableStateOf(false) }
+                            var renaming by remember(freqs.first()) { mutableStateOf(false) }
+                            var listing by remember(freqs.first()) { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier.weight(1f).fillMaxHeight().clip(DashShape.Medium)
                                     .background(if (on) DashColors.Accent.copy(alpha = 0.25f) else DashColors.CardHi)
@@ -137,13 +143,15 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                 // The name when the radio has told us one, the frequency under it.
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = DashSpace.Xs)) {
                                     Text(
-                                        s.name.ifEmpty { s.mhz }, color = DashColors.TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
+                                        s.name.ifEmpty { shownMhz }, color = DashColors.TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
                                     )
-                                    if (s.name.isNotEmpty()) Text(s.mhz, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                    val small = listOf(if (s.name.isNotEmpty()) shownMhz else "", mark).filter { it.isNotEmpty() }.joinToString(" " + Char(183) + " ")
+                                    if (small.isNotEmpty()) Text(small, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                     // For comparing the same station on two frequencies; easy to drop later.
                                     if (s.pi.isNotEmpty()) Text("PI " + s.pi, color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                 }
+                                if (listing) FrequenciesDialog(freqs, onDone = { listing = false }, onRemove = { radio.removeFrequency(context, s, it) })
                                 if (renaming) RenameDialog(s, radio.ownName(s), onDone = { renaming = false }, onName = { radio.rename(context, s, it) })
                                 WindowMenu(
                                     expanded = menu,
@@ -159,6 +167,10 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                         menu = false
                                         renaming = true
                                     }
+                                    RadioMenuItem(stringResource(R.string.widgets_radio_frequencies)) {
+                                        menu = false
+                                        listing = true
+                                    }
                                 }
                             }
                         }
@@ -168,6 +180,27 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** The frequencies of a station, each with a button that drops it; the last one dropped takes the station along. */
+@Composable
+private fun FrequenciesDialog(freqs: List<Int>, onDone: () -> Unit, onRemove: (Int) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDone,
+        containerColor = DashColors.Card,
+        title = { Text(stringResource(R.string.widgets_radio_frequencies), color = DashColors.TextPrimary) },
+        text = {
+            Column {
+                freqs.forEach { f ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(RadioStation(f, "").mhz + " MHz", color = DashColors.TextPrimary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { onRemove(f) }) { Text(stringResource(R.string.widgets_radio_remove), color = DashColors.Muted) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDone) { Text(stringResource(android.R.string.ok), color = DashColors.TextPrimary) } }
+    )
 }
 
 /** Asks for the name of [s]: prefilled, focused with the keyboard up; OK with nothing typed clears the name. */
@@ -228,7 +261,8 @@ internal fun radioPresetsFace(): WidgetFace {
 
 /** Whether the "+" cell shows: [playing] is a station that isn't among [saved] yet, and the tile has room for one more. */
 internal fun canSaveStation(saved: List<RadioStation>, playing: RadioStation?): Boolean =
-    playing != null && saved.size < StockRadio.SHOWN && saved.none { it.freq == playing.freq }
+    playing != null && saved.none { playing.freq in it.freqs.ifEmpty { listOf(it.freq) } } &&
+        (saved.size < StockRadio.SHOWN || (playing.pi.isNotEmpty() && saved.any { it.pi == playing.pi }))
 
 /** Characters a name can't hold (the stored format is one tab-separated line per station). */
 private val NAME_BREAKS = setOf(Char(10), Char(13), Char(9))

@@ -43,6 +43,7 @@
     <string name="widgets_radio_empty_add">Tap + to save the station that\'s playing</string>
     <string name="widgets_radio_remove">Remove</string>
     <string name="widgets_radio_rename">Rename</string>
+    <string name="widgets_radio_frequencies">Frequencies</string>
     <string name="widgets_hw_home">Home</string>
     <string name="widgets_hw_work">Work</string>
     <string name="widgets_hw_empty">Set Home and Work in Settings, Driving, Places</string>
