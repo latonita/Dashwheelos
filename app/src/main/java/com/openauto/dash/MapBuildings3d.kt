@@ -22,8 +22,21 @@ internal object MapBuildings3d {
     /** The extrusion's colour for the light or dark style. */
     fun color(light: Boolean): Int = if (light) LIGHT else DARK
 
-    /** The id of the first label layer (the flag says a layer is one), so the buildings go under the street names; null puts them on top. */
-    fun firstLabelId(layers: List<Pair<String, Boolean>>): String? = layers.firstOrNull { it.second }?.first
+    /** One style layer as far as the order goes: a label, or a flat fill or line, with its source-layer. */
+    class Slot(val id: String, val isSymbol: Boolean, val sourceLayer: String? = null)
+
+    /**
+     * Where the buildings go: under the first label that comes after the last
+     * flat fill or line (the roads and rails), so nothing flat is drawn over
+     * the walls, while the street names stay on top. Boundaries are ignored:
+     * they come after the labels. The style's first symbol layer is a water
+     * name, ahead of every road, so "below the first symbol" put the walls
+     * under the roads. Null puts them on top.
+     */
+    fun firstLabelId(layers: List<Slot>): String? {
+        val lastFlat = layers.indexOfLast { !it.isSymbol && it.sourceLayer != "boundary" }
+        return layers.drop(lastFlat + 1).firstOrNull { it.isSymbol }?.id
+    }
 
     /** Adds the layer (or removes it when [on] is false) on the current style. Safe to call again. */
     fun apply(style: Style, on: Boolean, light: Boolean) {
@@ -44,7 +57,13 @@ internal object MapBuildings3d {
                 )
                 setMinZoom(14f)
             }
-            val labelId = firstLabelId(style.layers.map { it.id to (it is SymbolLayer) })
+            val labelId = firstLabelId(style.layers.map {
+                Slot(
+                    it.id, it is SymbolLayer,
+                    (it as? com.mapbox.mapboxsdk.style.layers.LineLayer)?.sourceLayer
+                        ?: (it as? com.mapbox.mapboxsdk.style.layers.FillLayer)?.sourceLayer
+                )
+            })
             if (labelId != null) style.addLayerBelow(layer, labelId) else style.addLayer(layer)
         }
     }

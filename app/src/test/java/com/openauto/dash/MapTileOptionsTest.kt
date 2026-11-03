@@ -44,8 +44,16 @@ class MapTileOptionsTest {
     }
 
     @Test
-    fun theLayerGoesUnderTheFirstLabel() {
-        assertEquals("a", MapBuildings3d.firstLabelId(listOf("bg" to false, "a" to true, "b" to true)))
-        assertNull(MapBuildings3d.firstLabelId(listOf("bg" to false)))
+    fun theLayerGoesAfterTheRoadsAndUnderTheNames() {
+        fun flat(id: String, src: String? = null) = MapBuildings3d.Slot(id, false, src)
+        fun label(id: String) = MapBuildings3d.Slot(id, true)
+        // The OpenFreeMap order: a water name comes before the roads.
+        val style = listOf(
+            flat("water"), label("water_name"), flat("building", "building"), flat("highway_minor", "transportation"),
+            label("road_oneway"), flat("railway", "transportation"), label("highway_name_other"),
+            flat("boundary_state", "boundary"), label("place_city")
+        )
+        assertEquals("highway_name_other", MapBuildings3d.firstLabelId(style))
+        assertNull(MapBuildings3d.firstLabelId(listOf(flat("bg"), flat("roads", "transportation"))))
     }
 }
