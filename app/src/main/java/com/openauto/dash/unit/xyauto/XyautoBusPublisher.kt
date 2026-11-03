@@ -31,11 +31,19 @@ internal class XyautoBusPublisher(private val out: Publisher) {
     /** The wheels with a pressure; a wheel the box has none for is not in it. */
     private val tyres = HashMap<TyrePos, Tyre>()
 
+    /** The last flow (L/h) and speed (km/h) the box said; null is withdrawn. [consumption] works from these two. */
+    private var flowLph: Double? = null
+    private var speedKmh: Float? = null
+
     fun apply(values: List<CanboxValue>) = values.forEach(::apply)
 
     fun apply(v: CanboxValue) {
         when (v) {
-            is CanboxValue.SpeedKmh -> unitBusSpeed(out, v.kmh?.toFloat())
+            is CanboxValue.SpeedKmh -> {
+                unitBusSpeed(out, v.kmh?.toFloat())
+                speedKmh = v.kmh?.toFloat()
+                consumption()
+            }
             is CanboxValue.Rpm -> unitBusRpm(out, v.rpm)
             is CanboxValue.EngineLoadPct -> out.put(K.ENGINE_LOAD, v.pct?.toDouble())
             is CanboxValue.ThrottlePct -> out.put(K.THROTTLE, v.pct?.toDouble())
@@ -50,7 +58,11 @@ internal class XyautoBusPublisher(private val out: Publisher) {
             is CanboxValue.RangeKm -> out.put(K.RANGE, v.km?.toDouble())
             // The box repeats an unchanged flow only about every 11.5 s, so the key's 5 s would drop a steady reading;
             // the box withdraws it itself (0xFFFF) within about a second of the engine or bus stopping.
-            is CanboxValue.FuelFlowLph -> out.put(K.FUEL_FLOW, v.lph, ttlMs = UnitBus.FLOW_HOLD_MS)
+            is CanboxValue.FuelFlowLph -> {
+                out.put(K.FUEL_FLOW, v.lph, ttlMs = UnitBus.FLOW_HOLD_MS)
+                flowLph = v.lph
+                consumption()
+            }
             is CanboxValue.Doors -> out.put(
                 K.DOORS,
                 McuReader.DoorState(
@@ -70,6 +82,19 @@ internal class XyautoBusPublisher(private val out: Publisher) {
             is CanboxValue.Compass -> out.put(K.CAR_HEADING, v.reading?.headingDeg?.toDouble())
             is CanboxValue.Version -> out.put(K.CANBOX_VERSION, v.text)
         }
+    }
+
+    /**
+     * Instant consumption (L/100 km) from the last flow and speed, so the Car status tile has it in every skin; the box
+     * gives only the flow. Below [MIN_KMH], or with either input withdrawn, the key is withdrawn: at idle the quotient
+     * is huge and means nothing. A flow of 0.0 (fuel cut) is a reading and gives 0.0. Speed arrives often, so this is
+     * re-put on every frame with the flow's hold, which keeps a steady cruise alive between the box's flow repeats.
+     */
+    private fun consumption() {
+        val flow = flowLph
+        val kmh = speedKmh
+        val value = if (flow == null || kmh == null || kmh < MIN_KMH) null else flow / kmh * 100.0
+        out.put(K.FUEL_CONSUMPTION, value, ttlMs = UnitBus.FLOW_HOLD_MS)
     }
 
     /**
@@ -106,5 +131,10 @@ internal class XyautoBusPublisher(private val out: Publisher) {
             )
         }
         out.put(K.TYRES, tyres.toMap().takeIf { it.isNotEmpty() })
+    }
+
+    private companion object {
+        /** The same floor as the futuristic skin's drive stats. */
+        const val MIN_KMH = 5f
     }
 }
