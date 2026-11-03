@@ -54,6 +54,7 @@ internal object XyFmRadio : StockRadio {
     private const val PREFS = "xy_fm_radio"
     private const val KEY_LAST = "last_freq"
     private const val KEY_STATIONS = "stations"
+    private const val KEY_RDS_NAMES = "rds_names"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
@@ -111,7 +112,8 @@ internal object XyFmRadio : StockRadio {
         app = a
         val prefs = prefs(a)
         saved = FmStations.parse(prefs.getString(KEY_STATIONS, null))
-        _stations.value = saved.shown()
+        learned = FmLearned.parse(prefs.getString(KEY_RDS_NAMES, null))
+        _stations.value = shownStations()
         // What it was on at the last run, so a restart shows something before the radio says anything.
         prefs.getInt(KEY_LAST, 0).takeIf(::isFm)?.let { _playing.value = named(it) }
         // The radio's screen can't be asked about; holding the audio is the one sign of a radio that is up already.
@@ -127,9 +129,27 @@ internal object XyFmRadio : StockRadio {
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** A station with the name we know for it (saved, else the one the QF-era `radio_names` kept). */
+    /** The names stations broadcast, as the radio's session told them. */
+    private var learned = FmLearned()
+
+    private fun shownStations(): List<RadioStation> = saved.entries.map { RadioStation(it.freq, fmDisplayName(it.name, learned.nameOf(it.freq))) }
+
+    override fun ownName(station: RadioStation): String = saved.nameOf(station.freq)
+
+    override fun onSession(mediaId: String?, title: String?) {
+        val freq = parseFmMediaId(mediaId) ?: return
+        val next = learned.learn(freq, title)
+        if (next === learned) return
+        learned = next
+        app?.let { prefs(it).edit().putString(KEY_RDS_NAMES, learned.serialize()).apply() }
+        _stations.value = shownStations()
+        _playing.value = _playing.value?.let { named(it.freq) }
+        tell()
+    }
+
+    /** A station with the name we know for it (the driver's, else the broadcast one, else the QF-era `radio_names`). */
     private fun named(freq: Int): RadioStation {
-        val name = saved.nameOf(freq).ifEmpty {
+        val name = fmDisplayName(saved.nameOf(freq), learned.nameOf(freq)).ifEmpty {
             app?.getSharedPreferences("radio_names", Context.MODE_PRIVATE)?.getString(freq.toString(), null).orEmpty()
         }
         return RadioStation(freq, name)
@@ -143,7 +163,7 @@ internal object XyFmRadio : StockRadio {
 
     private fun edit(change: (FmStations) -> FmStations) {
         saved = change(saved)
-        _stations.value = saved.shown()
+        _stations.value = shownStations()
         _playing.value = _playing.value?.let { named(it.freq) }
         app?.let { prefs(it).edit().putString(KEY_STATIONS, saved.serialize()).apply() }
     }
@@ -151,6 +171,8 @@ internal object XyFmRadio : StockRadio {
     override fun add(context: Context, station: RadioStation) = edit { it.add(station.freq, station.name) }
 
     override fun remove(context: Context, station: RadioStation) = edit { it.remove(station.freq) }
+
+    override fun rename(context: Context, station: RadioStation, name: String) = edit { it.rename(station.freq, name) }
 
     // --- Is it playing -----------------------------------------------------
 

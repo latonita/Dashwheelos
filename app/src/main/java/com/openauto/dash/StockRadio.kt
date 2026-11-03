@@ -71,6 +71,14 @@ interface StockRadio {
     val editable: Boolean get() = false
     fun add(context: Context, station: RadioStation) = Unit
     fun remove(context: Context, station: RadioStation) = Unit
+    /** Gives [station] the driver's own [name] (blank clears it). */
+    fun rename(context: Context, station: RadioStation, name: String) = Unit
+
+    /** The name the driver gave [station] (not the one it broadcasts); what a rename starts from. */
+    fun ownName(station: RadioStation): String = station.name
+
+    /** The radio's own media session says it plays [mediaId] ("fm:8820") under [title]: names heard are kept. */
+    fun onSession(mediaId: String?, title: String?) = Unit
 
     /** The presets tile's text while there is nothing to list. */
     @get:StringRes val emptyTextRes: Int

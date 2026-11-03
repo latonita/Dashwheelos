@@ -41,6 +41,7 @@
     <string name="widgets_radio_empty">Nog geen zenders: sla ze op in de radio-app</string>
     <string name="widgets_radio_empty_add">Tik op + om de zender die speelt op te slaan</string>
     <string name="widgets_radio_remove">Verwijderen</string>
+    <string name="widgets_radio_rename">Hernoemen</string>
     <string name="widgets_hw_home">Thuis</string>
     <string name="widgets_hw_work">Werk</string>
     <string name="widgets_hw_empty">Stel Thuis en Werk in bij Instellingen, Rijden, Plaatsen</string>

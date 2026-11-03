@@ -41,6 +41,7 @@
     <string name="widgets_radio_empty">Nessuna stazione: salvale nell\'app radio</string>
     <string name="widgets_radio_empty_add">Tocca + per salvare la stazione in ascolto</string>
     <string name="widgets_radio_remove">Rimuovi</string>
+    <string name="widgets_radio_rename">Rinomina</string>
     <string name="widgets_hw_home">Casa</string>
     <string name="widgets_hw_work">Lavoro</string>
     <string name="widgets_hw_empty">Imposta Casa e Lavoro in Impostazioni, Guida, Luoghi</string>

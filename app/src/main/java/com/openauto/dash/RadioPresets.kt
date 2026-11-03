@@ -20,7 +20,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -113,6 +123,7 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                             }
                             val on = playing?.freq == s.freq
                             var menu by remember(s.freq) { mutableStateOf(false) }
+                            var renaming by remember(s.freq) { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier.weight(1f).fillMaxHeight().clip(DashShape.Medium)
                                     .background(if (on) DashColors.Accent.copy(alpha = 0.25f) else DashColors.CardHi)
@@ -131,6 +142,7 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                     )
                                     if (s.name.isNotEmpty()) Text(s.mhz, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                 }
+                                if (renaming) RenameDialog(s, radio.ownName(s), onDone = { renaming = false }, onName = { radio.rename(context, s, it) })
                                 WindowMenu(
                                     expanded = menu,
                                     onDismissRequest = { menu = false },
@@ -141,6 +153,10 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                                         menu = false
                                         radio.remove(context, s)
                                     }
+                                    RadioMenuItem(stringResource(R.string.widgets_radio_rename)) {
+                                        menu = false
+                                        renaming = true
+                                    }
                                 }
                             }
                         }
@@ -150,6 +166,34 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** Asks for the name of [s]: prefilled, focused with the keyboard up; OK with nothing typed clears the name. */
+@Composable
+private fun RenameDialog(s: RadioStation, own: String, onDone: () -> Unit, onName: (String) -> Unit) {
+    var text by remember { mutableStateOf(own) }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun save() { onName(text); onDone() }
+    LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }
+    AlertDialog(
+        onDismissRequest = onDone,
+        containerColor = DashColors.Card,
+        title = { Text(s.mhz + " MHz", color = DashColors.TextPrimary) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.filterNot { c -> c in NAME_BREAKS }.take(FmStations.MAX_NAME) },
+                singleLine = true,
+                label = { Text(stringResource(R.string.widgets_radio_rename)) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { save() }),
+                modifier = Modifier.focusRequester(focus)
+            )
+        },
+        confirmButton = { TextButton(onClick = { save() }) { Text(stringResource(android.R.string.ok), color = DashColors.TextPrimary) } },
+        dismissButton = { TextButton(onClick = onDone) { Text(stringResource(android.R.string.cancel), color = DashColors.Muted) } }
+    )
 }
 
 @Composable
@@ -183,3 +227,6 @@ internal fun radioPresetsFace(): WidgetFace {
 /** Whether the "+" cell shows: [playing] is a station that isn't among [saved] yet, and the tile has room for one more. */
 internal fun canSaveStation(saved: List<RadioStation>, playing: RadioStation?): Boolean =
     playing != null && saved.size < StockRadio.SHOWN && saved.none { it.freq == playing.freq }
+
+/** Characters a name can't hold (the stored format is one tab-separated line per station). */
+private val NAME_BREAKS = setOf(Char(10), Char(13), Char(9))

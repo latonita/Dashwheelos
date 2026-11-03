@@ -41,6 +41,7 @@
     <string name="widgets_radio_empty">Ainda sem estações: guarde-as na app de rádio</string>
     <string name="widgets_radio_empty_add">Toque em + para guardar a estação que está a tocar</string>
     <string name="widgets_radio_remove">Remover</string>
+    <string name="widgets_radio_rename">Renomear</string>
     <string name="widgets_hw_home">Casa</string>
     <string name="widgets_hw_work">Trabalho</string>
     <string name="widgets_hw_empty">Defina Casa e Trabalho em Definições, Condução, Locais</string>

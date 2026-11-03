@@ -86,11 +86,14 @@ internal sealed class SourcePick {
  * really PLAYING wins, unless the radio holds the audio; then a radio that is up wins over sessions that only idle,
  * and over the empty one the unit always keeps (a Bluetooth session with no state); then the first session.
  */
-internal fun pickSource(sessions: List<SessionView>, radioAlive: Boolean, radioFocus: Boolean): SourcePick {
-    if (radioFocus) return SourcePick.Radio
+internal fun pickSource(sessions: List<SessionView>, radioAlive: Boolean, radioFocus: Boolean, radioPackage: String? = null): SourcePick {
+    // The radio's own session (where it has one) speaks for the radio: title, radio text and buttons come from it.
+    val own = if (radioPackage == null) -1 else sessions.indexOfFirst { it.packageName == radioPackage }
+    val radio = if (own >= 0) SourcePick.Session(own) else SourcePick.Radio
+    if (radioFocus) return radio
     val playing = sessions.indexOfFirst { it.playing }
     if (playing >= 0) return SourcePick.Session(playing)
-    if (radioAlive) return SourcePick.Radio
+    if (radioAlive) return radio
     return if (sessions.isNotEmpty()) SourcePick.Session(0) else SourcePick.None
 }
 
@@ -114,6 +117,11 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
     fun add(freq: Int, name: String = "", max: Int = StockRadio.SHOWN): FmStations =
         if (canAdd(freq, max)) FmStations(entries + FmEntry(freq, clean(name))) else this
 
+    /** [freq] saved under [name] (blank clears it); the same list when [freq] isn't saved. */
+    fun rename(freq: Int, name: String): FmStations =
+        if (!contains(freq)) this
+        else FmStations(entries.map { if (it.freq == freq) FmEntry(freq, clean(name).take(MAX_NAME)) else it })
+
     fun remove(freq: Int): FmStations = FmStations(entries.filter { it.freq != freq })
 
     /** The stations in the order shown. */
@@ -124,6 +132,9 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
     fun serialize(): String = entries.joinToString("\n") { "${it.freq}\t${it.name}" }
 
     companion object {
+        /** The longest name kept, in characters. */
+        const val MAX_NAME = 24
+
         private val BLANKS = Regex("[\t\r\n]")
 
         private fun clean(name: String) = name.replace(BLANKS, " ").trim()
@@ -146,6 +157,68 @@ internal class FmStations(val entries: List<FmEntry> = emptyList()) {
             }
             val all = pinned.sortedBy { it.first }.map { it.second } + saved
             return FmStations(all.distinctBy { it.freq }.take(max))
+        }
+    }
+}
+
+// --- The radio's own MediaSession ---------------------------------------------------------------------------
+
+/** The frequency (10 kHz units) in a session's `MEDIA_ID` ("fm:8820"); null for anything else. */
+internal fun parseFmMediaId(id: String?): Int? =
+    id?.trim()?.takeIf { it.startsWith("fm:", ignoreCase = true) }?.substring(3)?.trim()?.toIntOrNull()?.takeIf(::isFm)
+
+private val FREQUENCY_TEXT = Regex("""\s*\d{2,3}([.,]\d{1,2})?\s*(MHz|FM)\s*|\s*\d{2,3}[.,]\d{1,2}\s*""", RegexOption.IGNORE_CASE)
+
+/** The station name a session's title carries, or null: blank, or only the frequency ("88.2 MHz") is not a name. */
+internal fun fmBroadcastName(title: String?): String? =
+    title?.replace(Regex("[\t\r\n]"), " ")?.trim()?.takeIf { it.isNotEmpty() && !FREQUENCY_TEXT.matches(it) }?.take(FmStations.MAX_NAME)
+
+/** What the media tile shows for the radio's session: its title, the radio text under it, else the frequency. */
+internal fun fmSessionState(title: String?, text: String?, freq: Int?, playing: Boolean): MediaState {
+    val frequency = freq?.let { radioLabel(HeadUnitMedia.RadioStation(it, 0, null)) }
+    val name = fmBroadcastName(title)
+    return MediaState(
+        title = name ?: frequency ?: title.orEmpty().trim().ifEmpty { "FM" },
+        artist = text?.trim().orEmpty().ifEmpty { listOfNotNull(frequency, "FM").joinToString(" · ") },
+        isPlaying = playing,
+        hasMedia = true
+    )
+}
+
+/** The name a preset shows: the driver's own, else the one the station broadcast, else none (the frequency shows). */
+internal fun fmDisplayName(own: String?, learned: String?): String = own.orEmpty().ifBlank { learned.orEmpty() }
+
+/**
+ * The broadcast names heard, by frequency, oldest first and at most [max]; one "freq TAB name" line each when
+ * [serialize]d. Immutable.
+ */
+internal class FmLearned(val names: Map<Int, String> = emptyMap()) {
+    fun nameOf(freq: Int): String = names[freq].orEmpty()
+
+    /** [name] kept for [freq]; the same when it isn't a name, or not new. */
+    fun learn(freq: Int, name: String?, max: Int = 120): FmLearned {
+        val n = fmBroadcastName(name) ?: return this
+        if (!isFm(freq) || names[freq] == n) return this
+        val next = LinkedHashMap(names)
+        next.remove(freq)
+        next[freq] = n
+        while (next.size > max) next.remove(next.keys.first())
+        return FmLearned(next)
+    }
+
+    fun serialize(): String = names.entries.joinToString("\n") { "${it.key}\t${it.value}" }
+
+    companion object {
+        fun parse(text: String?): FmLearned {
+            val m = LinkedHashMap<Int, String>()
+            for (line in text.orEmpty().lineSequence()) {
+                val p = line.split('\t')
+                if (p.size != 2) continue
+                val f = p[0].toIntOrNull()?.takeIf(::isFm) ?: continue
+                val n = fmBroadcastName(p[1]) ?: continue
+                m[f] = n
+            }
+            return FmLearned(m)
         }
     }
 }

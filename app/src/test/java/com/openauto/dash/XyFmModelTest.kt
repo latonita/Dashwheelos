@@ -228,4 +228,100 @@ class XyFmModelTest {
         assertTrue(canSaveStation(List(StockRadio.SHOWN - 1) { RadioStation(9000 + it * 10, "") }, a))
         assertFalse(canSaveStation(List(StockRadio.SHOWN) { RadioStation(9000 + it * 10, "") }, a))
     }
+
+    @Test
+    fun rename_setsAndClearsTheName() {
+        val l = FmStations().add(8820).add(9650, "old")
+        assertEquals("Radio Budva", l.rename(8820, "  Radio Budva ").nameOf(8820))
+        assertEquals("", l.rename(9650, "").nameOf(9650))
+        assertEquals(listOf(8820, 9650), l.rename(9650, "x").entries.map { it.freq })
+    }
+
+    @Test
+    fun rename_roundTripKeepsSpacesAndCyrillic() {
+        val l = FmStations().add(8820).rename(8820, "Авто радио 2")
+        val back = FmStations.parse(l.serialize())
+        assertEquals("Авто радио 2", back.nameOf(8820))
+    }
+
+    @Test
+    fun rename_stripsTabsAndNewlinesAndCapsTheLength() {
+        val l = FmStations().add(8820).rename(8820, "a" + Char(9) + "b" + Char(10) + "c")
+        assertEquals("a b c", l.nameOf(8820))
+        assertEquals(1, FmStations.parse(l.serialize()).entries.size)
+        assertEquals(FmStations.MAX_NAME, FmStations().add(8820).rename(8820, "x".repeat(60)).nameOf(8820).length)
+    }
+
+    @Test
+    fun rename_unknownFrequencyIsNothing() {
+        val l = FmStations().add(8820, "A")
+        assertEquals(l.serialize(), l.rename(9650, "B").serialize())
+    }
+
+    @Test
+    fun mediaId_parsesFmFrequency() {
+        assertEquals(8820, parseFmMediaId("fm:8820"))
+        assertEquals(10_460, parseFmMediaId(" FM:10460 "))
+        assertNull(parseFmMediaId("fm:abc"))
+        assertNull(parseFmMediaId("fm:99999"))
+        assertNull(parseFmMediaId("am:1000"))
+        assertNull(parseFmMediaId(null))
+    }
+
+    @Test
+    fun broadcastName_ignoresBlankAndFrequencyTitles() {
+        assertNull(fmBroadcastName(null))
+        assertNull(fmBroadcastName("  "))
+        assertNull(fmBroadcastName("88.2 MHz"))
+        assertNull(fmBroadcastName("88.20"))
+        assertEquals("PLAY", fmBroadcastName(" PLAY "))
+        assertEquals("106", fmBroadcastName("106"))
+    }
+
+    @Test
+    fun learned_keepsRealNamesPerFrequency() {
+        val l = FmLearned().learn(8820, "88.2 MHz").learn(8820, "PLAY").learn(9870, "RADIO BUDVA")
+        assertEquals("PLAY", l.nameOf(8820))
+        assertEquals("", l.nameOf(10_000))
+        assertEquals("PLAY", l.learn(8820, "").nameOf(8820))
+        assertEquals("Авто", FmLearned.parse(FmLearned().learn(8820, "Авто").serialize()).nameOf(8820))
+        assertEquals("", FmLearned().learn(1008, "X").nameOf(1008))
+    }
+
+    @Test
+    fun displayName_ownBeatsBroadcastBeatsFrequency() {
+        assertEquals("Mine", fmDisplayName("Mine", "PLAY"))
+        assertEquals("PLAY", fmDisplayName("", "PLAY"))
+        assertEquals("", fmDisplayName("", ""))
+        val l = FmStations().add(8820).rename(8820, "Mine")
+        assertEquals("PLAY", fmDisplayName(l.rename(8820, "").nameOf(8820), "PLAY"))
+    }
+
+    @Test
+    fun sessionState_nameWithTextOrFrequency() {
+        val a = fmSessionState("PLAY", "www.playradio.me", 8820, true)
+        assertEquals("PLAY", a.title)
+        assertEquals("www.playradio.me", a.artist)
+        val b = fmSessionState("PLAY", null, 8820, true)
+        assertEquals("88.2 MHz · FM", b.artist)
+        val c = fmSessionState("88.2 MHz", "", 8820, false)
+        assertEquals("88.2 MHz", c.title)
+        assertEquals("88.2 MHz · FM", c.artist)
+        assertFalse(c.isPlaying)
+    }
+
+    @Test
+    fun pick_radioSessionStandsInForTheRadio() {
+        val fm = SessionView("com.android.fmradio", true)
+        val bt = SessionView("com.android.bluetooth", false)
+        assertEquals(SourcePick.Session(1), pickSource(listOf(bt, fm), radioAlive = true, radioFocus = true, radioPackage = "com.android.fmradio"))
+        assertEquals(SourcePick.Session(1), pickSource(listOf(bt, SessionView("com.android.fmradio", false)), radioAlive = true, radioFocus = false, radioPackage = "com.android.fmradio"))
+    }
+
+    @Test
+    fun pick_noRadioSessionFallsBackToTheBroadcastPath() {
+        val bt = SessionView("com.android.bluetooth", false)
+        assertEquals(SourcePick.Radio, pickSource(listOf(bt), radioAlive = true, radioFocus = true, radioPackage = "com.android.fmradio"))
+        assertEquals(SourcePick.Radio, pickSource(listOf(bt), radioAlive = true, radioFocus = false, radioPackage = "com.android.fmradio"))
+    }
 }

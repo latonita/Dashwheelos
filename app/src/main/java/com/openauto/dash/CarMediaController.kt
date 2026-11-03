@@ -146,7 +146,7 @@ class CarMediaController(private val context: Context) {
         radioPicked = false
         if (r != null) {
             val views = boundControllers.map { SessionView(it.packageName, it.playbackState?.state == PlaybackState.STATE_PLAYING) }
-            when (val pick = pickSource(views, r.running, r.hasAudioFocus())) {
+            when (val pick = pickSource(views, r.running, r.hasAudioFocus(), r.packageName)) {
                 is SourcePick.Session -> activeController = boundControllers[pick.index]
                 SourcePick.Radio -> { activeController = null; radioPicked = true }
                 SourcePick.None -> activeController = null
@@ -200,6 +200,16 @@ class CarMediaController(private val context: Context) {
         }
         val metadata = controller.metadata
         val playback = controller.playbackState
+        val playing = playback?.state == PlaybackState.STATE_PLAYING
+        // The unit's own radio has a session: its station name and radio text, its buttons (the tune stays a broadcast).
+        val radio = judgingRadio()?.takeIf { it.packageName == controller.packageName }
+        if (radio != null && metadata != null) {
+            val mediaId = metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
+            val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE)
+            radio.onSession(mediaId, title)
+            showMedia(fmSessionState(title, metadata.getString(MediaMetadata.METADATA_KEY_ARTIST), parseFmMediaId(mediaId), playing))
+            return
+        }
         // What to play again at the next start, if the car is switched off now (MediaResume).
         MediaResume.note(controller.packageName, playback?.state == PlaybackState.STATE_PLAYING)
         // A new song by an app in a tile: its player comes up there.
