@@ -237,4 +237,28 @@ class RideTrackTest {
         // Runs still join.
         assertEquals(runs[0].points.last(), runs[1].points.first())
     }
+
+    @Test
+    fun aFinishedDriveIsArchivedOnlyOnce() {
+        val t = RideTrack()
+        for (i in 0..60) t.add(5, p(i * 20.0))
+        assertTrue(RideTrack.worthArchiving(t, 0L))
+        assertFalse(RideTrack.worthArchiving(t, 5L))
+    }
+
+    @Test
+    fun aDriveUnderHalfAKilometreIsNotArchived() {
+        val t = RideTrack()
+        for (i in 0..20) t.add(5, p(i * 20.0))
+        // 400 m: the drive log would not log it.
+        assertFalse(RideTrack.worthArchiving(t, 0L))
+        t.add(5, p(520.0))
+        assertTrue(RideTrack.worthArchiving(t, 0L))
+    }
+
+    @Test
+    fun noDriveOrOnePointIsNotArchived() {
+        assertFalse(RideTrack.worthArchiving(RideTrack(), 0L))
+        assertFalse(RideTrack.worthArchiving(RideTrack(listOf(p(0.0)), 5), 0L))
+    }
 }

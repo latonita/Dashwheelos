@@ -141,6 +141,17 @@ internal class RideTrack(points: List<RidePoint> = emptyList(), driveId: Long = 
         /** Drive starts whose archive files go: all but the newest [max] (the file name is the start time). */
         fun archiveVictims(starts: List<Long>, max: Int): List<Long> = starts.sortedDescending().drop(max)
 
+        /** How far the points reach along the path, in metres. */
+        fun lengthM(points: List<RidePoint>): Double = points.zipWithNext().sumOf { distanceM(it.first, it.second) }
+
+        /**
+         * [track] is a finished drive to put in the archive: it has a path, is at least the drive log's minimum
+         * [DriveLogRules.MIN_KM] long (a shorter one is never logged) and is not [archivedId], already done.
+         */
+        fun worthArchiving(track: RideTrack, archivedId: Long): Boolean =
+            track.driveId != 0L && track.driveId != archivedId && track.size >= 2 &&
+                lengthM(track.points) >= DriveLogRules.MIN_KM * 1000
+
         /** The finished drive [startedAt] is the one [track] holds, and it went somewhere. */
         fun isDriveOf(track: RideTrack, startedAt: Long): Boolean = track.driveId == startedAt && track.size >= 2
     }

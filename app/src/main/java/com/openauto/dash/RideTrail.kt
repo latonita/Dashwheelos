@@ -28,6 +28,8 @@ internal object RideTrail {
     private var track = RideTrack()
     private var dir: File? = null
     private var dirty = false
+    /** The drive whose track is already in the archive. */
+    private var archivedId = 0L
     private var savedAt = 0L
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "ride-trail").apply { isDaemon = true } }
 
@@ -46,6 +48,9 @@ internal object RideTrail {
     /** A GPS step [l] that counted towards trip [driveId] at [speedKmh]. Main thread. */
     fun onFix(driveId: Long, l: Location, speedKmh: Float) {
         val p = RideTrack.pointOf(l.latitude, l.longitude, speedKmh, System.currentTimeMillis())
+        // A new drive wipes the track: the finished one goes to the archive first (a user's trip reset
+        // can reach here before [DriveLog] has logged the drive).
+        if (track.driveId != driveId) archiveHeld()
         if (track.add(driveId, p)) {
             dirty = true
             _revision.value++
@@ -67,15 +72,22 @@ internal object RideTrail {
 
     /** The drive [startedAt] was logged: its track, if that is the one held, is kept in the archive. */
     fun archive(startedAt: Long) {
+        if (RideTrack.isDriveOf(track, startedAt)) archiveHeld()
+    }
+
+    /** Puts the held track in the archive, unless it is already there or too short to be a logged drive. */
+    private fun archiveHeld() {
         val d = dir ?: return
-        if (!RideTrack.isDriveOf(track, startedAt)) return
+        if (!RideTrack.worthArchiving(track, archivedId)) return
+        archivedId = track.driveId
         flush(force = true)
-        val reduced = RideTrack(track.points, track.driveId).reduced(RideTrack.ARCHIVE_POINTS)
+        val id = track.driveId
+        val reduced = RideTrack(track.points, id).reduced(RideTrack.ARCHIVE_POINTS)
         io.execute {
             runCatching {
                 val a = File(d, ARCHIVE)
                 a.mkdirs()
-                write(File(a, "$startedAt.txt"), reduced.encode())
+                write(File(a, "$id.txt"), reduced.encode())
                 val starts = a.listFiles().orEmpty().mapNotNull { it.name.removeSuffix(".txt").toLongOrNull() }
                 RideTrack.archiveVictims(starts, DriveLogRules.MAX_ITEMS).forEach { File(a, "$it.txt").delete() }
             }
