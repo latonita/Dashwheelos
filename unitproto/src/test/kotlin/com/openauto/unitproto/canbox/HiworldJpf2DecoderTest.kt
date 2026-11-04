@@ -40,6 +40,21 @@ class HiworldJpf2DecoderTest {
     }
 
     @Test
+    fun stock0x72_decodesTheAccBit() {
+        val dec = HiworldJpf2Decoder()
+        fun acc(vararg b: Int) = dec.decode(CanFrame(HiworldJpf2Cmd.STATE, bytes(*b))).filterIsInstance<CanboxValue.Acc>()
+        assertEquals(listOf(CanboxValue.Acc(true)), acc(0x01, 0, 0, 0))
+        assertEquals(listOf(CanboxValue.Acc(true)), acc(0x07, 0, 0, 0))
+        assertEquals(listOf(CanboxValue.Acc(false)), acc(0x06, 0, 0, 0))   // illumination + reverse, key off
+        assertEquals(true, HiworldJpf2Signals.ignBit(bytes(0x11)))
+        assertEquals(false, HiworldJpf2Signals.ignBit(bytes(0x01)))
+        assertNull(HiworldJpf2Signals.ignBit(bytes()))
+        assertNull(HiworldJpf2Signals.acc(bytes()))
+        assertNull(HiworldJpf2Signals.acc(null))
+        assertTrue(acc().isEmpty())
+    }
+
+    @Test
     fun stock0x72_carriesTheLightsAndTheDimmer() {
         // ACC + illumination, dimmer at the WK's middle step (raw 0x66 -> 51 %).
         // Checksum by hand: 0E + 72 + 03 + 33 - 1 = B5.
@@ -118,7 +133,7 @@ class HiworldJpf2DecoderTest {
     @Test
     fun stock0x72_alsoSaysReverse() {
         assertEquals(
-            listOf(CanboxValue.Reverse(true), CanboxValue.Lights(false), CanboxValue.Dimmer(0)),
+            listOf(CanboxValue.Reverse(true), CanboxValue.Lights(false), CanboxValue.Dimmer(0), CanboxValue.Acc(true), CanboxValue.IgnBit(false)),
             decode(HiworldJpf2Cmd.STATE, 0x05, 0x00, 0x00, 0x00)
         )
         assertEquals(CanboxValue.Reverse(false), decode(HiworldJpf2Cmd.STATE, 0x03, 0x00, 0x00, 0x33).first())

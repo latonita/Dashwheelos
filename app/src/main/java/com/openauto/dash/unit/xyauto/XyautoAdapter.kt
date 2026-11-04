@@ -75,6 +75,8 @@ internal class XyautoAdapter(context: Context) : UnitAdapter {
     )
 
     override val vendorPackages: Set<String> = XyautoProtocol.PACKAGES
+
+    override val ignitionOnBus: Boolean get() = hasCanStack
 }
 
 /**
