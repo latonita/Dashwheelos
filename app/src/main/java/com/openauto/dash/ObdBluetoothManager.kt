@@ -1188,6 +1188,10 @@ object ObdBluetoothManager {
                 }
             }
             if (response.isEmpty()) unanswered(command ?: "(read on)") else silentCommands = 0
+            // Debug builds trace the diagnostic traffic (module sweeps and clears), one line per exchange.
+            if (diagSending && BuildConfig.DEBUG) {
+                Log.d("ObdTrace", "${command ?: "(read on)"} -> ${response.toString().replace("\r", "|").replace("\n", "|")}")
+            }
             response.toString().replace(">", "").trim().ifEmpty { null }
         } catch (e: IOException) {
             // The link is gone: drop it so the retry opens a fresh one.

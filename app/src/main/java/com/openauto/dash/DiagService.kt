@@ -152,7 +152,11 @@ object DiagService {
             val context = appContext ?: return@withLock Result.failure(IllegalStateException("OBD error"))
             precheck(context)?.let { return@withLock it }
             val (profile, descriptions) = profile()
+            Log.i(TAG, "sweep: profile ${profile.id}")
             scanner.sweep(profile, descriptions, DiagSettings.probeAll(context))
+                .onSuccess { scans ->
+                    scans.forEach { Log.i(TAG, "sweep: ${it.module.id} ${it.outcome} n=${it.countReported} ${it.codes.joinToString { c -> "${c.code}/${c.status}" }}") }
+                }
                 .map { AiMechanic.report(it, announce) }
                 .recoverCatching { throw IllegalStateException(message(context, it), it) }
         } catch (e: Exception) {
