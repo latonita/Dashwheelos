@@ -176,4 +176,6 @@
     <string name="widgets_switch_screen_off_detail">Wyłącza ekran jak przycisk radia</string>
     <string name="map_tile_3d_buildings">Budynki 3D</string>
     <string name="map_tile_3d_buildings_detail">Pokazuje budynki jako bryły. Bardziej obciąża układ graficzny.</string>
+    <string name="map_tile_ride_trail">Ślad przejazdu</string>
+    <string name="map_tile_ride_trail_detail">Pokazuje trasę tego przejazdu, kolorowaną wg prędkości i blednącą za autem.</string>
 </resources>

@@ -172,4 +172,6 @@
     <string name="widgets_switch_screen_off_detail">Apaga la pantalla como la tecla del equipo</string>
     <string name="map_tile_3d_buildings">Edificios en 3D</string>
     <string name="map_tile_3d_buildings_detail">Muestra los edificios como bloques. Usa más el chip gráfico.</string>
+    <string name="map_tile_ride_trail">Rastro del viaje</string>
+    <string name="map_tile_ride_trail_detail">Muestra el recorrido de este viaje, coloreado por velocidad y desvaneciéndose tras el coche.</string>
 </resources>

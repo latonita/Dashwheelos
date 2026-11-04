@@ -172,4 +172,6 @@
     <string name="widgets_switch_screen_off_detail">Éteint l\'écran comme la touche du poste</string>
     <string name="map_tile_3d_buildings">Bâtiments en 3D</string>
     <string name="map_tile_3d_buildings_detail">Affiche les bâtiments en volume. Sollicite davantage la puce graphique.</string>
+    <string name="map_tile_ride_trail">Trace du trajet</string>
+    <string name="map_tile_ride_trail_detail">Affiche le parcours de ce trajet, coloré selon la vitesse, qui s\'estompe derrière la voiture.</string>
 </resources>

@@ -13,16 +13,24 @@ import kotlinx.coroutines.flow.asStateFlow
 internal object MapTileOptions {
     const val PREFS = "map_tile"
     const val KEY_BUILDINGS_3D = "buildings_3d"
+    const val KEY_RIDE_TRAIL = "ride_trail"
+
+    /** The trail of the current ride is on unless switched off; recording goes on either way. */
+    const val RIDE_TRAIL_DEFAULT = true
 
     /** Extruded buildings cost a weak GPU dearly (the Mali-450 of these units), so they are opt-in. */
     const val BUILDINGS_3D_DEFAULT = false
 
     private val _buildings3d = MutableStateFlow(BUILDINGS_3D_DEFAULT)
     val buildings3d: StateFlow<Boolean> = _buildings3d.asStateFlow()
+    private val _rideTrail = MutableStateFlow(RIDE_TRAIL_DEFAULT)
+    val rideTrail: StateFlow<Boolean> = _rideTrail.asStateFlow()
     private var loaded = false
 
     /** The saved choice; nothing saved means [BUILDINGS_3D_DEFAULT]. */
     fun parse(saved: Boolean?): Boolean = saved ?: BUILDINGS_3D_DEFAULT
+
+    fun parseRideTrail(saved: Boolean?): Boolean = saved ?: RIDE_TRAIL_DEFAULT
 
     @Synchronized
     fun load(context: Context) {
@@ -30,11 +38,18 @@ internal object MapTileOptions {
         loaded = true
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         _buildings3d.value = parse(if (prefs.contains(KEY_BUILDINGS_3D)) prefs.getBoolean(KEY_BUILDINGS_3D, BUILDINGS_3D_DEFAULT) else null)
+        _rideTrail.value = parseRideTrail(if (prefs.contains(KEY_RIDE_TRAIL)) prefs.getBoolean(KEY_RIDE_TRAIL, RIDE_TRAIL_DEFAULT) else null)
     }
 
     fun setBuildings3d(context: Context, on: Boolean) {
         load(context)
         _buildings3d.value = on
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_BUILDINGS_3D, on).apply()
+    }
+
+    fun setRideTrail(context: Context, on: Boolean) {
+        load(context)
+        _rideTrail.value = on
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_RIDE_TRAIL, on).apply()
     }
 }

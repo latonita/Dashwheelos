@@ -58,6 +58,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -152,7 +153,7 @@ private val AccentMark: Color get() = DashColors.AccentInk
  * the lower part of the screen, and at most [WALLPAPER_FPS] frames a second.
  */
 @Composable
-fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false, buildings3d: Boolean = false) {
+fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false, buildings3d: Boolean = false, rideTrail: Boolean = false) {
     // Typing a destination waits until the car has stopped (the drive lock).
     val moving = LocalDriveLock.current.moving
     val context = LocalContext.current
@@ -416,6 +417,27 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false, bui
         val map = mapRef ?: return@LaunchedEffect
         map.getStyle { style -> MapBuildings3d.apply(style, buildings3d, lightMap) }
     }
+    // The ride trail's layers belong to the style like the route line: [styleGen] says a new style has
+    // been built, so the trail's data is sent to it again.
+    val rideTrailNow = rememberUpdatedState(rideTrail)
+    var styleGen by remember { mutableIntStateOf(0) }
+    LaunchedEffect(mapRef, rideTrail, styleGen) {
+        val map = mapRef ?: return@LaunchedEffect
+        map.getStyle { style -> MapRideTrail.apply(style, rideTrail) }
+        if (!rideTrail) return@LaunchedEffect
+        var seen = -1
+        while (true) {
+            val rev = RideTrail.revision.value
+            if (rev != seen) {
+                seen = rev
+                val points = RideTrail.snapshot()
+                val json = withContext(Dispatchers.Default) { RideRuns.geoJson(RideRuns.build(points)) }
+                map.getStyle { style -> MapRideTrail.update(style, json) }
+            }
+            // At most every two seconds, and only when a point was kept.
+            delay(RIDE_TRAIL_REFRESH_MS)
+        }
+    }
     LaunchedEffect(mapRef, styleUrl) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
@@ -425,6 +447,9 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false, bui
             if (!lightMap && styleUrl == MapServers.DEFAULT_STYLE_DARK) MapDarkContrast.apply(style)
             // setStyle built new layers: the 3D buildings go back on if wanted.
             MapBuildings3d.apply(style, buildings3dNow.value, lightMap)
+            // The ride trail goes in before the route line, which must stay above it.
+            MapRideTrail.apply(style, rideTrailNow.value)
+            styleGen++
             // The route's source and layers belong to the style, and switching
             // between the day and night styles builds a new one — so the line
             // has to be made again each time or it disappears with the old
@@ -985,6 +1010,9 @@ private const val SEARCH_TAG = "DashMapSearch"
 
 /** A map touch this soon after the search panel opened does not close it. */
 private const val SEARCH_GRACE_MS = 1_000L
+
+/** The ride trail is sent to the map at most this often. */
+private const val RIDE_TRAIL_REFRESH_MS = 2_000L
 
 /** Seconds of free panning before the camera snaps back to the vehicle. */
 private const val TRACKING_RESUME_MS = 10_000L

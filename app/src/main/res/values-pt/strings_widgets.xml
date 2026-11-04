@@ -172,4 +172,6 @@
     <string name="widgets_switch_screen_off_detail">Desliga o ecrã como a tecla do aparelho</string>
     <string name="map_tile_3d_buildings">Edifícios em 3D</string>
     <string name="map_tile_3d_buildings_detail">Mostra os edifícios como blocos em relevo. Exige mais do chip gráfico.</string>
+    <string name="map_tile_ride_trail">Rasto da viagem</string>
+    <string name="map_tile_ride_trail_detail">Mostra o percurso desta viagem, colorido pela velocidade e a desvanecer atrás do carro.</string>
 </resources>

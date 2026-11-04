@@ -177,4 +177,6 @@
     <string name="widgets_switch_screen_off_detail">Гасит экран, как кнопка магнитолы</string>
     <string name="map_tile_3d_buildings">3D-здания</string>
     <string name="map_tile_3d_buildings_detail">Показывает здания объёмными. Сильнее нагружает графический чип.</string>
+    <string name="map_tile_ride_trail">След поездки</string>
+    <string name="map_tile_ride_trail_detail">Показывает путь текущей поездки, окрашенный по скорости и бледнеющий позади машины.</string>
 </resources>

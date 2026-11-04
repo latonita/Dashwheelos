@@ -304,7 +304,11 @@ object LocationFeed {
         if (prev != null && l.accuracy <= 30f) {
             val d = prev.distanceTo(l).toDouble()
             val dt = (l.time - prev.time).coerceIn(0L, 60_000L)
-            tripStep(_trip.value, d, dt, speedKmh, System.currentTimeMillis())?.let { _trip.value = it }
+            tripStep(_trip.value, d, dt, speedKmh, System.currentTimeMillis())?.let {
+                _trip.value = it
+                // The same counted step goes to the map's ride trail.
+                RideTrail.onFix(it.startedAt, l, speedKmh)
+            }
         }
         lastFix = l
     }

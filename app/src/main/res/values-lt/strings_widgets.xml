@@ -177,4 +177,6 @@
     <string name="widgets_switch_screen_off_detail">Išjungia ekraną kaip įrenginio mygtukas</string>
     <string name="map_tile_3d_buildings">3D pastatai</string>
     <string name="map_tile_3d_buildings_detail">Pastatai rodomi kaip erdviniai blokai. Labiau apkrauna vaizdo lustą.</string>
+    <string name="map_tile_ride_trail">Kelionės pėdsakas</string>
+    <string name="map_tile_ride_trail_detail">Rodo šios kelionės kelią, nuspalvintą pagal greitį ir blėstantį už automobilio.</string>
 </resources>
