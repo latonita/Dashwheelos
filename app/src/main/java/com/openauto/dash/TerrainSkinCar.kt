@@ -396,7 +396,7 @@ private fun rememberTerrainProblems(): List<MapProblem> {
     val messageTexts = carMessages.map { carMessageText(it.code) }
     val codeSerious = if (diagnosis?.severity == Severity.STOP) 2 else 1
     val codeNames = codes.orEmpty().map { c ->
-        diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ObdCodes.describe(c).localizedTitle()
+        diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle()
     }
     return remember(carMessages, messageTexts, codes, codeSerious, codeNames) {
         carMessages.mapIndexedNotNull { i, m ->

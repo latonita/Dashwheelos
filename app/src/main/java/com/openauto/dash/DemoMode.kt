@@ -149,7 +149,7 @@ object DemoMode {
 
     /** The fault-code tile's state for [codes]: the advice comes with them, as after a real scan. */
     internal fun mechanicState(codes: List<String>) =
-        AiMechanic.State(codes = codes, diagnosis = diagnosis?.takeIf { codes.isNotEmpty() })
+        AiMechanic.State.ofCodes(codes, diagnosis?.takeIf { codes.isNotEmpty() })
 
     /**
      * The trip computer's count since the refuel: a fill-up three days before

@@ -5,6 +5,12 @@ import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.SystemClock
+import com.openauto.dash.diag.DiagProfiles
+import com.openauto.dash.diag.DiagProtocol
+import com.openauto.dash.diag.DiagScanner
+import com.openauto.dash.diag.Dtc
+import com.openauto.dash.diag.ModuleScan
+import com.openauto.dash.diag.Obd2Read
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -145,10 +151,16 @@ object MechanicPrompt {
         language: AiLanguage,
         data: ObdData?,
         references: Map<String, String> = emptyMap(),
-        currency: String = "€"
+        currency: String = "€",
+        /** Code to the modules that reported it ([where]); empty for a generic scan. */
+        where: Map<String, String> = emptyMap()
     ): String = buildString {
         appendLine(MechanicPersona.of(car))
         appendLine("Its OBD scan reports these stored fault codes: ${codes.joinToString(", ")}.")
+        if (where.isNotEmpty()) {
+            appendLine("The computer (module) that reported each code, and its status there (the same code can mean different things in different modules): " +
+                codes.mapNotNull { c -> where[c]?.let { "$c = $it" } }.joinToString("; ") + ".")
+        }
         if (references.isNotEmpty()) {
             appendLine("Generic meanings from the car's built-in code table (the maker's own meaning wins where it differs): " +
                 references.entries.joinToString("; ") { (code, meaning) -> "$code = $meaning" } + ".")
@@ -172,6 +184,19 @@ object MechanicPrompt {
         appendLine("  - driving: whether the car can still be driven, and what happens if the fault is ignored.")
         appendLine("Consider the codes together and with the readings: several codes often share one cause. Discuss only these codes, exactly as written: do not assume or add any other fault.")
         append("Where you are not sure what a code means on this car, say so plainly and rate it \"soon\" rather than guess; never call a fault harmless without good grounds.")
+    }
+
+    /**
+     * For a module-by-module scan: each code with the modules that reported it and its status there
+     * ("Engine (PCM) active, Transmission (TCM) stored"). Empty for a generic OBD-II scan, whose prompt stays as it was.
+     */
+    fun where(scans: List<ModuleScan>): Map<String, String> {
+        if (scans.all { it.module.protocol == DiagProtocol.OBD2 }) return emptyMap()
+        val out = LinkedHashMap<String, MutableList<String>>()
+        for (s in scans) for (d in s.codes) {
+            out.getOrPut(d.code) { ArrayList() } += "${s.module.name} (${s.module.id}) ${d.status.name.lowercase()}"
+        }
+        return out.mapValues { (_, v) -> v.distinct().joinToString(", ") }
     }
 
     /** Live values worth sending; zeros mean "not reported" and are left out. */
@@ -363,43 +388,6 @@ internal data class SpokenLine(val res: Int, val args: List<Any>, val quantity: 
     }
 }
 
-/**
- * Scans again once the engine has been running a while, when the last scan
- * was made with it stopped. The adapter usually connects at ignition-on,
- * before the engine starts: the dashboard lamps are then only self-testing,
- * and some faults are only judged with the engine running.
- */
-internal class RescanAfterStart {
-    // Told of scans on the IO threads, fed readings on the OBD collector's: both synchronized.
-    private var pending = false
-    private var runningSince: Long? = null
-
-    /** A scan just finished at [rpm]. */
-    @Synchronized
-    fun scanned(rpm: Int) {
-        pending = rpm == 0
-        runningSince = null
-    }
-
-    /** True once, when the engine has run [RUNNING_MS] since a scan made with it stopped. */
-    @Synchronized
-    fun due(rpm: Int, now: Long): Boolean {
-        if (!pending) return false
-        if (rpm <= LiveWatch.RUNNING_RPM) {
-            runningSince = null
-            return false
-        }
-        val since = runningSince ?: now.also { runningSince = it }
-        if (now - since < RUNNING_MS) return false
-        pending = false
-        return true
-    }
-
-    companion object {
-        const val RUNNING_MS = 20_000L
-    }
-}
-
 /** Sentences the car says without the AI (offline, no key, or live-reading warnings). */
 internal object MechanicLines {
 
@@ -463,15 +451,39 @@ internal class UnreadableAnswerException : Exception("Gemini's answer was unread
 object AiMechanic {
 
     data class State(
-        /** Codes from the last scan; null until one has run. */
-        val codes: List<String>? = null,
+        /** The last scan, module by module; null until one has run. */
+        val scans: List<ModuleScan>? = null,
         val diagnosis: Diagnosis? = null,
         val thinking: Boolean = false,
         /** Why there's no AI advice (no key, offline, refused). */
         val note: Note? = null,
         /** The request failed in a way asking again might fix. */
-        val canRetry: Boolean = false
-    )
+        val canRetry: Boolean = false,
+        /** When the last scan finished (wall clock); a scan that changed nothing still moves it. */
+        val scannedAt: Long = 0L
+    ) {
+        /** The codes of every module, each once, in module order; null until a scan has run. */
+        val codes: List<String>? get() = scans?.let { all -> all.flatMap { s -> s.codes.map { it.code } }.distinct() }
+
+        /** Each module's faults as "ABS:U0126:ACTIVE": what the automation event compares. */
+        val faultKeys: List<String>
+            get() = scans.orEmpty().flatMap { s -> s.codes.map { "${s.module.id}:${it.code}:${it.status}" } }.distinct()
+
+        /** Where [code] was reported: the module scans holding it, with the code as each reported it. */
+        fun where(code: String): List<Pair<ModuleScan, Dtc>> =
+            scans.orEmpty().mapNotNull { s -> s.codes.firstOrNull { it.code == code }?.let { s to it } }
+
+        /** The profile's own description of [code] (the first module that has one); null for generic codes. */
+        fun description(code: String): String? = where(code).firstNotNullOfOrNull { it.second.description }
+
+        companion object {
+            /** A generic OBD-II scan of [codes] (all stored), as the demo gives them. */
+            fun ofCodes(codes: List<String>?, diagnosis: Diagnosis? = null): State = State(
+                scans = codes?.let { listOf(DiagScanner.obd2Scan(DiagProfiles.GenericObd2.modules.single(), Obd2Read(it, emptyList()))) },
+                diagnosis = diagnosis
+            )
+        }
+    }
 
     /** Why a tile shows no AI advice; turned into text when shown, in the launcher's language. */
     sealed interface Note {
@@ -493,12 +505,26 @@ object AiMechanic {
      */
     internal const val FORGET_MS = 3L * 24 * 60 * 60 * 1000
 
-    /** "P1352:1728480000000,P0380:…" (when each was last seen); a code alone is from before the dates, taken as seen now. */
+    /**
+     * "ABS:U0126:1728480000000,PCM:P0676:…": each module's code and when it was last seen. Entries from before
+     * the modules ("P1352:1728480000000", or a code alone, from before the dates) were the engine's: they become
+     * "ENGINE:P1352", the generic profile's module; a code alone is taken as seen [now].
+     */
     internal fun parseKnown(text: String, now: Long): Map<String, Long> =
         text.split(',').filter { it.isNotBlank() }.associate { part ->
-            val code = part.substringBefore(':').trim()
-            code to (part.substringAfter(':', "").toLongOrNull() ?: now)
+            val fields = part.trim().split(':').map { it.trim() }
+            val time = fields.last().toLongOrNull()
+            val names = if (time != null) fields.dropLast(1) else fields
+            val key = if (names.size >= 2) names.take(2).joinToString(":") else "$GENERIC_MODULE:${names.first()}"
+            key to (time ?: now)
         }
+
+    /** The module id older entries of [KEY_KNOWN] belong to: the generic profile's engine. */
+    private val GENERIC_MODULE = DiagProfiles.GenericObd2.modules.single().id
+
+    /** "ABS:U0126" for each code of [scans], each once: what [KEY_KNOWN] remembers. */
+    internal fun knownKeys(scans: List<ModuleScan>): List<String> =
+        scans.flatMap { s -> s.codes.map { "${s.module.id}:${it.code}" } }.distinct()
 
     internal fun formatKnown(known: Map<String, Long>): String = known.entries.joinToString(",") { "${it.key}:${it.value}" }
 
@@ -522,7 +548,6 @@ object AiMechanic {
     // Scan results can come from the auto-scan and the Scan button at once.
     private val mutex = Mutex()
     private val liveWatch = LiveWatch()
-    private val rescan = RescanAfterStart()
     private var appContext: Context? = null
 
     fun setContext(context: Context) {
@@ -538,18 +563,15 @@ object AiMechanic {
         _state.value = state
     }
 
-    /** Called when the OBD link comes up: scans without being asked. */
-    suspend fun autoScan() {
-        ObdBluetoothManager.readTroubleCodes().onSuccess { report(it, announce = true) }
-    }
-
     /**
-     * New scan results. Codes not heard before are announced when [announce];
-     * the explanation always lands on the tile.
+     * New scan results ([DiagService] alone calls this), module by module. Codes not heard before are announced
+     * when [announce]; the explanation always lands on the tile. A scan that says just what the last one said
+     * (the same reply from every module) is silent: only [State.scannedAt] moves.
      */
-    fun report(codes: List<String>, announce: Boolean) {
+    fun report(scans: List<ModuleScan>, announce: Boolean) {
         // Demo codes are shown as scanned with canned advice, never remembered, asked of Gemini or spoken.
         if (DemoMode.isOn) {
+            val codes = scans.flatMap { s -> s.codes.map { it.code } }.distinct()
             if (codes.any { it !in _state.value.codes.orEmpty() }) _newFaultAt.value = System.currentTimeMillis()
             _state.value = DemoMode.mechanicState(codes)
             return
@@ -557,36 +579,57 @@ object AiMechanic {
         scope.launch {
             mutex.withLock {
                 val context = appContext ?: return@withLock
-                val list = codes.map { it.trim().uppercase() }.filter { it.isNotEmpty() }.distinct()
-                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 val now = System.currentTimeMillis()
-                val seen = parseKnown(prefs.getString(KEY_KNOWN, "").orEmpty(), now)
-                // New: not seen for days. A scan that missed a code doesn't make it new next time.
-                val fresh = newCodes(list, seen, now)
-                prefs.edit().putString(KEY_KNOWN, formatKnown(remembered(list, seen, now))).apply()
-                rescan.scanned(ObdBluetoothManager.readings().rpm)
-                _state.value = State(codes = list)
-                if (fresh.isNotEmpty()) _newFaultAt.value = now
-                if (list.isNotEmpty()) explain(context, list, fresh = if (announce) fresh else emptyList())
+                val before = _state.value
+                val merged = DiagScanner.merge(before.scans, scans)
+                if (DiagScanner.sameAs(before.scans, merged) && !before.canRetry) {
+                    _state.value = before.copy(scannedAt = now)
+                    return@withLock
+                }
+                update(context, merged, announce, now)
             }
         }
     }
 
-    /** Codes were cleared from the car: forget them. */
-    fun cleared() {
+    /** Under [mutex]: [scans] are the new state; new codes remembered, explained, and said when [announce]. */
+    private suspend fun update(context: Context, scans: List<ModuleScan>, announce: Boolean, now: Long) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val keys = knownKeys(scans)
+        val seen = parseKnown(prefs.getString(KEY_KNOWN, "").orEmpty(), now)
+        // New: not seen for days. A scan that missed a code doesn't make it new next time.
+        val freshKeys = newCodes(keys, seen, now)
+        prefs.edit().putString(KEY_KNOWN, formatKnown(remembered(keys, seen, now))).apply()
+        val fresh = freshKeys.map { it.substringAfter(':') }.distinct()
+        val state = State(scans = scans, scannedAt = now)
+        _state.value = state
+        if (fresh.isNotEmpty()) _newFaultAt.value = now
+        if (!state.codes.isNullOrEmpty()) explain(context, scans, fresh = if (announce) fresh else emptyList())
+    }
+
+    /** One module was cleared and read again ([scan]): its codes are forgotten, then the whole goes in as a scan. */
+    fun cleared(scan: ModuleScan) {
         if (DemoMode.isOn) return
-        appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.remove(KEY_KNOWN)?.apply()
-        _state.value = State(codes = emptyList())
+        scope.launch {
+            mutex.withLock {
+                val context = appContext ?: return@withLock
+                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val now = System.currentTimeMillis()
+                val prefix = scan.module.id + ":"
+                val kept = parseKnown(prefs.getString(KEY_KNOWN, "").orEmpty(), now).filterKeys { !it.startsWith(prefix) }
+                prefs.edit().putString(KEY_KNOWN, formatKnown(kept)).apply()
+                update(context, DiagScanner.replace(_state.value.scans, scan), announce = false, now = now)
+            }
+        }
     }
 
     /** Asks again for the current codes (after adding a key, changing language, or coming back online). */
     fun refresh() {
-        val codes = _state.value.codes ?: return
-        if (codes.isEmpty()) return
+        val scans = _state.value.scans ?: return
+        if (_state.value.codes.isNullOrEmpty()) return
         scope.launch {
             mutex.withLock {
                 val context = appContext ?: return@withLock
-                explain(context, codes, fresh = emptyList(), asked = true)
+                explain(context, scans, fresh = emptyList(), asked = true)
             }
         }
     }
@@ -610,10 +653,9 @@ object AiMechanic {
         if (before != language) refresh()
     }
 
-    /** Checks one set of live readings against the warning rules, and rescans once the engine runs. */
+    /** Checks one set of live readings against the warning rules. (The rescan after the engine starts is [DiagService]'s.) */
     fun watch(data: ObdData) {
         if (DemoMode.isOn) return
-        if (rescan.due(data.rpm, System.currentTimeMillis())) scope.launch { autoScan() }
         val alert = liveWatch.check(data, System.currentTimeMillis(), CarProfileStore.current.hotC) ?: return
         val context = appContext ?: return
         if (alert == LiveWatch.Alert.WEAK_BATTERY) {
@@ -639,7 +681,10 @@ object AiMechanic {
      * and to be announced). [asked]: the driver wants it now (Retry, a new
      * key), so a refusal from a moment ago doesn't stand in for the answer.
      */
-    private suspend fun explain(context: Context, codes: List<String>, fresh: List<String>, asked: Boolean = false) {
+    private suspend fun explain(context: Context, scans: List<ModuleScan>, fresh: List<String>, asked: Boolean = false) {
+        val base = State(scans = scans, scannedAt = _state.value.scannedAt)
+        val codes = base.codes.orEmpty()
+        val where = MechanicPrompt.where(scans)
         val config = AiSettings.load(context)
         explainedIn = config.language
         // Said in the launcher's voice; Gemini's sentence only when it wrote in that language.
@@ -657,16 +702,18 @@ object AiMechanic {
         val floor = SeverityFloor.of(codes, readings.coolantTempC, car.hotC)
         val bounded: (Diagnosis) -> Diagnosis = { d -> SeverityFloor.apply(d, floor) { MechanicLines.ruleVerdict(it).text(resources) } }
         // "v2": answers with the detail sheet; older, shorter ones are asked again.
-        val cacheKey = "diag_v2_" + codes.sorted().joinToString(",") + "|" + car.promptDescription().hashCode() + "|" + config.language.name
+        // A module-by-module profile asks with the modules named: those answers are kept apart from generic ones.
+        val cacheKey = "diag_v2_" + codes.sorted().joinToString(",") + (if (where.isEmpty()) "" else "|m" + where.hashCode()) +
+            "|" + car.promptDescription().hashCode() + "|" + config.language.name
         val cached = DiagnosisCache.get(context, cacheKey)
         cached?.let { MechanicPrompt.parse(it.text) }?.let { parsed ->
             val d = bounded(parsed.copy(model = cached.model))
-            _state.value = State(codes = codes, diagnosis = d)
+            _state.value = base.copy(diagnosis = d)
             say(d.summary)
             return
         }
         if (config.apiKey.isBlank()) {
-            _state.value = State(codes = codes, note = Note.NoKey)
+            _state.value = base.copy(note = Note.NoKey)
             say(offline)
             return
         }
@@ -677,21 +724,21 @@ object AiMechanic {
         val ask = cacheKey + "|" + config.apiKey.hashCode()
         val refused = refusal
         if (!asked && refused != null && ask == refusedAsk && SystemClock.elapsedRealtime() - refusedAt < retryAfterMs(refused)) {
-            _state.value = State(codes = codes, note = Note.Unavailable(refused), canRetry = true)
+            _state.value = base.copy(note = Note.Unavailable(refused), canRetry = true)
             say(offline)
             return
         }
 
-        _state.value = State(codes = codes, thinking = true)
+        _state.value = base.copy(thinking = true)
         val references = codes.mapNotNull { code -> ObdCodes.tableTitle(code)?.let { code to it } }.toMap()
-        val prompt = MechanicPrompt.build(codes, car.promptDescription(), config.language, readings, references, car.currency)
+        val prompt = MechanicPrompt.build(codes, car.promptDescription(), config.language, readings, references, car.currency, where)
         GeminiClient.generate(config.apiKey, prompt, MechanicPrompt.schema(codes))
             .mapCatching { reply -> reply to (MechanicPrompt.parse(reply.text) ?: throw UnreadableAnswerException()) }
             .onSuccess { (reply, diagnosis) ->
                 DiagnosisCache.put(context, cacheKey, reply)
                 refusal = null
                 val d = bounded(diagnosis.copy(model = reply.model))
-                _state.value = State(codes = codes, diagnosis = d)
+                _state.value = base.copy(diagnosis = d)
                 say(d.summary)
             }
             .onFailure {
@@ -700,7 +747,7 @@ object AiMechanic {
                     refusedAt = SystemClock.elapsedRealtime()
                     refusal = it
                 }
-                _state.value = State(codes = codes, note = Note.Unavailable(it), canRetry = true)
+                _state.value = base.copy(note = Note.Unavailable(it), canRetry = true)
                 say(offline)
             }
     }

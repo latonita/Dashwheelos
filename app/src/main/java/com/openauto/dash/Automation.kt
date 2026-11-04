@@ -142,7 +142,9 @@ object Automation {
                 .collect { tell(context, if (it) Event.OBD_CONNECTED else Event.OBD_DISCONNECTED) }
         }
         scope.launch {
-            AiMechanic.state.map { it.codes.orEmpty() }.distinctUntilChanged().drop(1)
+            // Told when a module's faults change: a new code, a cleared one, or one turned active.
+            AiMechanic.state.map { it.faultKeys to it.codes.orEmpty() }.distinctUntilChanged { a, b -> a.first == b.first }.drop(1)
+                .map { it.second }
                 .collect { codes -> if (codes.isNotEmpty()) tell(context, Event.FAULT_CODES) { putExtra("codes", codes.joinToString(",")) } }
         }
     }

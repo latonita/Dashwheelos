@@ -1,5 +1,6 @@
 package com.openauto.dash
 
+import com.openauto.dash.diag.DtcStatus
 import com.openauto.dash.vehicle.any
 import com.openauto.dash.vehicle.rememberDoors
 import com.openauto.dash.vehicle.rememberGauges
@@ -303,17 +304,21 @@ private fun faultCodesFace(env: SkinTileEnv): WidgetFace {
     val pending by ObdBluetoothManager.pending.collectAsState()
     var busy by remember { mutableStateOf(false) }
     val connected = env.obdConnection == ObdConnectionState.CONNECTED
+    val sweeping by DiagService.busy.collectAsState()
+    // Clear is per module: here only where the profile has one module (generic OBD-II); the tile's sheet has the rest.
+    val lone = ai.scans?.singleOrNull()?.module?.takeIf { it.clearSteps.isNotEmpty() }
     val clearCodes = rememberClearCodes {
+        val module = lone ?: return@rememberClearCodes
         busy = true
         scope.launch {
-            ObdBluetoothManager.clearTroubleCodes().onSuccess { AiMechanic.cleared() }
+            DiagService.clear(module)
             busy = false
         }
     }
-    val scan = FaceAction(Icons.Filled.Search, stringResource(R.string.vehicle_scan), primary = true, enabled = connected && !busy, onClick = {
+    val scan = FaceAction(Icons.Filled.Search, stringResource(R.string.vehicle_scan), primary = true, enabled = connected && !busy && !sweeping, onClick = {
         busy = true
         scope.launch {
-            ObdBluetoothManager.readTroubleCodes().onSuccess { AiMechanic.report(it, announce = false) }
+            DiagService.scanNow()
             busy = false
         }
     })
@@ -327,7 +332,7 @@ private fun faultCodesFace(env: SkinTileEnv): WidgetFace {
         } else obdIdle(BuiltinKind.OBD_DTC, env, "")
     }
     val codes = ai.codes.orEmpty()
-    val titles = remember(codes, context) { codes.map { ObdCodes.describe(it).localizedTitle(context) } }
+    val titles = remember(ai, context) { codes.map { ai.description(it) ?: ObdCodes.describe(it).localizedTitle(context) } }
     val lampOn = lamp?.on == true
     val count = serious.size + codes.size
     return WidgetFace(
@@ -349,12 +354,12 @@ private fun faultCodesFace(env: SkinTileEnv): WidgetFace {
             else -> 0
         },
         rows = messageRows + codes.mapIndexed { i, c ->
-            FaceRow("$c ${titles[i]}", if (c in pending) stringResource(R.string.vehicle_pending) else "", alert = true)
+            FaceRow("$c ${titles[i]}", if (c in pending || ai.where(c).any { it.second.status == DtcStatus.PENDING }) stringResource(R.string.vehicle_pending) else "", alert = true)
         },
         stats = listOfNotNull(lamp?.let { FaceStat(stringResource(R.string.design_engine_lamp), stringResource(if (it.on) R.string.design_on else R.string.design_off)) }),
         actions = listOf(
             scan,
-            FaceAction(Icons.Filled.DeleteSweep, stringResource(R.string.vehicle_clear), enabled = connected && !busy && codes.isNotEmpty(), onClick = clearCodes)
+            FaceAction(Icons.Filled.DeleteSweep, stringResource(R.string.vehicle_clear), enabled = connected && !busy && !sweeping && lone != null && codes.isNotEmpty(), onClick = clearCodes)
         )
     )
 }
