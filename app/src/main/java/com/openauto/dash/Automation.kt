@@ -143,7 +143,7 @@ object Automation {
         }
         scope.launch {
             // Told when a module's faults change: a new code, a cleared one, or one turned active.
-            AiMechanic.state.map { it.faultKeys to it.codes.orEmpty() }.distinctUntilChanged { a, b -> a.first == b.first }.drop(1)
+            AiMechanic.state.map { it.warningKeys to it.warningCodes.orEmpty() }.distinctUntilChanged { a, b -> a.first == b.first }.drop(1)
                 .map { it.second }
                 .collect { codes -> if (codes.isNotEmpty()) tell(context, Event.FAULT_CODES) { putExtra("codes", codes.joinToString(",")) } }
         }

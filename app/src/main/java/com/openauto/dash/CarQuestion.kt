@@ -160,10 +160,10 @@ internal fun currentCarSnapshot(now: Long = System.currentTimeMillis()): CarSnap
         rangeKm = fuel?.rangeKm,
         rangeFromCar = fuel?.rangeFromCar == true,
         lampOn = ObdBluetoothManager.lamp.value?.on,
-        codes = ai.codes,
+        codes = ai.warningCodes,
         pending = ObdBluetoothManager.pending.value,
         diagnosis = ai.diagnosis,
-        codeMeanings = ai.codes.orEmpty().filter { it !in explained }.mapNotNull { c -> ObdCodes.tableTitle(c)?.let { c to it } }.toMap(),
+        codeMeanings = ai.warningCodes.orEmpty().filter { it !in explained }.mapNotNull { c -> ObdCodes.tableTitle(c)?.let { c to it } }.toMap(),
         filterShortStreak = CarCare.state.value.filter.shortStreak.takeIf { car.particleFilter },
         upkeep = Maintenance.state.value.statuses(now).filter { it.stage == UpkeepStage.SOON || it.stage == UpkeepStage.DUE },
         extras = PidExplorer.readings.value

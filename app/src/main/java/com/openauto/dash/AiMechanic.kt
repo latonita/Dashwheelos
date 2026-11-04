@@ -10,6 +10,7 @@ import com.openauto.dash.diag.DiagProtocol
 import com.openauto.dash.diag.DiagScanner
 import com.openauto.dash.diag.Dtc
 import com.openauto.dash.diag.ModuleScan
+import com.openauto.dash.diag.MutedCodes
 import com.openauto.dash.diag.Obd2Read
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -460,10 +461,19 @@ object AiMechanic {
         /** The request failed in a way asking again might fix. */
         val canRetry: Boolean = false,
         /** When the last scan finished (wall clock); a scan that changed nothing still moves it. */
-        val scannedAt: Long = 0L
+        val scannedAt: Long = 0L,
+        /** The codes the driver muted ([MutedCodes]); taken when the state is made, kept current by [AiMechanic]. */
+        val muted: Set<String> = MutedCodes.codes.value
     ) {
         /** The codes of every module, each once, in module order; null until a scan has run. */
         val codes: List<String>? get() = scans?.let { all -> all.flatMap { s -> s.codes.map { it.code } }.distinct() }
+
+        /** [codes] without the muted ones: what warns (verdict, circles, counts, voice). Null until a scan has run. */
+        val warningCodes: List<String>? get() = codes?.filter { it !in muted }
+
+        /** [faultKeys] without the muted codes: what the automation event compares. */
+        val warningKeys: List<String>
+            get() = scans.orEmpty().flatMap { s -> s.codes.filter { it.code !in muted }.map { "${s.module.id}:${it.code}:${it.status}" } }.distinct()
 
         /** Each module's faults as "ABS:U0126:ACTIVE": what the automation event compares. */
         val faultKeys: List<String>
@@ -528,6 +538,9 @@ object AiMechanic {
 
     internal fun formatKnown(known: Map<String, Long>): String = known.entries.joinToString(",") { "${it.key}:${it.value}" }
 
+    /** The new codes that may be announced: not muted. */
+    internal fun freshUnmuted(fresh: List<String>, muted: Set<String>): List<String> = fresh.filter { it !in muted }
+
     /** The codes in [list] not seen within [FORGET_MS] of [now]. */
     internal fun newCodes(list: List<String>, known: Map<String, Long>, now: Long): List<String> =
         list.filter { code -> known[code]?.let { now - it > FORGET_MS } ?: true }
@@ -553,7 +566,26 @@ object AiMechanic {
     fun setContext(context: Context) {
         appContext = context.applicationContext
         CarVoice.setContext(context)
+        MutedCodes.load(context)
+        if (!followingMute) {
+            followingMute = true
+            scope.launch { MutedCodes.codes.collect { m -> followMute(m) } }
+        }
         liveWatch.weakSaidAt = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_WEAK_SAID, 0L)
+    }
+
+    private var followingMute = false
+
+    /** The driver (un)muted a code: the state carries it, and the advice is asked again for the codes that still warn. */
+    private suspend fun followMute(muted: Set<String>) {
+        if (_state.value.muted == muted) return
+        _state.value = _state.value.copy(muted = muted)
+        if (DemoMode.isOn) return
+        val context = appContext ?: return
+        mutex.withLock {
+            val scans = _state.value.scans ?: return@withLock
+            if (scans.any { s -> s.codes.isNotEmpty() }) explain(context, scans, fresh = emptyList())
+        }
     }
 
     private const val KEY_WEAK_SAID = "weak_battery_said_at"
@@ -599,7 +631,8 @@ object AiMechanic {
         // New: not seen for days. A scan that missed a code doesn't make it new next time.
         val freshKeys = newCodes(keys, seen, now)
         prefs.edit().putString(KEY_KNOWN, formatKnown(remembered(keys, seen, now))).apply()
-        val fresh = freshKeys.map { it.substringAfter(':') }.distinct()
+        // A muted code is remembered like any, but never new: no announcement, no new-fault moment.
+        val fresh = freshUnmuted(freshKeys.map { it.substringAfter(':') }.distinct(), MutedCodes.codes.value)
         val state = State(scans = scans, scannedAt = now)
         _state.value = state
         if (fresh.isNotEmpty()) _newFaultAt.value = now
@@ -683,8 +716,13 @@ object AiMechanic {
      */
     private suspend fun explain(context: Context, scans: List<ModuleScan>, fresh: List<String>, asked: Boolean = false) {
         val base = State(scans = scans, scannedAt = _state.value.scannedAt)
-        val codes = base.codes.orEmpty()
-        val where = MechanicPrompt.where(scans)
+        // Muted codes are left out of what Gemini is asked (and of the cache key): the advice is about what still warns.
+        val codes = base.warningCodes.orEmpty()
+        if (codes.isEmpty()) {
+            _state.value = base
+            return
+        }
+        val where = MechanicPrompt.where(scans.map { s -> s.copy(codes = s.codes.filter { it.code !in base.muted }) })
         val config = AiSettings.load(context)
         explainedIn = config.language
         // Said in the launcher's voice; Gemini's sentence only when it wrote in that language.

@@ -44,7 +44,7 @@ internal object CarNews {
                 val now = System.currentTimeMillis()
                 buildList {
                     addAll(upkeepNotices(res, upkeep.statuses(now), now))
-                    faultNotice(res, mechanic.codes, mechanic.diagnosis?.summary, now)?.let(::add)
+                    faultNotice(res, mechanic.warningCodes, mechanic.diagnosis?.summary, now)?.let(::add)
                     filterNotice(res, care.filter.shortStreak, now)?.let(::add)
                     weak?.let(::add)
                 }

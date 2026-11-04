@@ -326,7 +326,7 @@ internal fun rememberNowView(pending: PendingActionState): NowView {
             .sortedBy { it.level.ordinal }.distinctBy { it.textRes }
     }
     val now = clock
-    val codes = ai.codes.orEmpty()
+    val codes = ai.warningCodes.orEmpty()
     val severity = if (codes.isEmpty()) null else ai.diagnosis?.severity ?: SeverityFloor.of(codes, 0, car.hotC)
     val event = agenda.events.firstOrNull { !it.allDay && it.begin > now }
     // The demo has no servicing plan: an oil change coming up, shown here only.

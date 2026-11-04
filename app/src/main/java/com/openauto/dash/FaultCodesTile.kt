@@ -4,6 +4,7 @@ import com.openauto.dash.diag.ClearRisk
 import com.openauto.dash.diag.DiagModule
 import com.openauto.dash.diag.DtcStatus
 import com.openauto.dash.diag.ModuleScan
+import com.openauto.dash.diag.MutedCodes
 import com.openauto.dash.diag.ScanOutcome
 import com.openauto.dash.vehicle.rememberGaugeInt
 import com.openauto.dash.vehicle.K
@@ -15,7 +16,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,6 +52,7 @@ import androidx.compose.material.icons.filled.Euro
 import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TaskAlt
@@ -80,6 +84,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -117,6 +122,9 @@ internal fun ObdDtcCard(
     val connected = connection == ObdConnectionState.CONNECTED
     val ai by AiMechanic.state.collectAsState()
     val codes = ai.codes
+    // Muted codes stay in the list (dimmed) but warn nowhere: verdict, circles on the car, the count.
+    val warning = ai.warningCodes
+    val toggleMute = rememberMuteToggle()
     val diagnosis = ai.diagnosis
     // A profile that reads several modules (Jeep WK): codes carry their module, Clear is per module, in a sheet.
     val scans = ai.scans
@@ -130,7 +138,7 @@ internal fun ObdDtcCard(
     val carMessages = rememberCarMessages().let { all ->
         when {
             !psa -> emptyList()
-            codes.isNullOrEmpty() -> all
+            warning.isNullOrEmpty() -> all
             else -> all.filter { it.code !in PsaWarnings.engineLamp }
         }
     }
@@ -142,18 +150,19 @@ internal fun ObdDtcCard(
     val codeNames = codes.orEmpty().map { c ->
         (diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle()) + " · " + c
     }
-    val mapProblems = remember(carMessages, messageTexts, codes, diagnosis, codeNames) {
+    val mapProblems = remember(carMessages, messageTexts, codes, warning, diagnosis, codeNames) {
         carMessages.mapIndexedNotNull { i, m ->
             CarProblemMap.spotOf(m.code)?.let { spot -> MapProblem(spot, m.serious, messageTexts[i], number = i + 1) }
         } + codes.orEmpty().mapIndexedNotNull { i, code ->
-            CarProblemMap.spotOfCode(code)?.let { spot -> MapProblem(spot, codeSerious, codeNames[i], number = carMessages.size + i + 1) }
+            if (code in ai.muted) null
+            else CarProblemMap.spotOfCode(code)?.let { spot -> MapProblem(spot, codeSerious, codeNames[i], number = carMessages.size + i + 1) }
         }
     }
     val lamp by ObdBluetoothManager.lamp.collectAsState()
-    val verdict = carVerdict(carMessages.map { it.level }, codes, diagnosis?.severity, lamp?.on == true)
-    val problemCount = carMessages.count { it.level != PsaWarnings.Level.INFO } + codes.orEmpty().size
+    val verdict = carVerdict(carMessages.map { it.level }, warning, diagnosis?.severity, lamp?.on == true)
+    val problemCount = carMessages.count { it.level != PsaWarnings.Level.INFO } + warning.orEmpty().size
     val problemNames = messageTexts.filterIndexed { i, _ -> carMessages[i].level != PsaWarnings.Level.INFO } +
-        codes.orEmpty().map { c -> diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle() }
+        warning.orEmpty().map { c -> diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle() }
     // Only whether the engine runs matters here: the card must not redraw on every OBD sample.
     val rpm = rememberGaugeInt(K.RPM)
     val engineOff = rpm == null || rpm == 0
@@ -286,7 +295,8 @@ internal fun ObdDtcCard(
                     onOpen = if (advice != null) ({ opened = code }) else null,
                     selected = in3d && turnedTo == number,
                     onSelect = if (in3d && mapProblems.any { it.number == number }) ({ picked = number }) else null,
-                    active = where.any { it.second.status == DtcStatus.ACTIVE }
+                    active = where.any { it.second.status == DtcStatus.ACTIVE },
+                    muted = code in ai.muted, onToggleMute = { toggleMute(code) }
                 )
             }
         }
@@ -626,6 +636,7 @@ private fun VerdictBanner(verdict: CarVerdict, count: Int, lampOn: Boolean) {
  * the mechanic explained opens its detail sheet ([onOpen]).
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ProblemRow(
     number: Int, serious: Int, title: String, detail: String?, source: String, pending: Boolean, onOpen: (() -> Unit)?,
     /** The car in 3D is turned to it. */
@@ -633,9 +644,13 @@ private fun ProblemRow(
     /** Turns the car in 3D to it; the details then open from the arrow alone. */
     onSelect: (() -> Unit)? = null,
     /** A module reports it as present now: the row is tinted and outlined in the warning colour. */
-    active: Boolean = false
+    active: Boolean = false,
+    /** The driver muted the code: dimmed, neutral, never highlighted. */
+    muted: Boolean = false,
+    /** Long tap: mutes the code, or unmutes it (null: the row has no mute, as the car's own messages). */
+    onToggleMute: (() -> Unit)? = null
 ) {
-    val colour = when (serious) { 2 -> DashColors.Critical; 1 -> DashColors.Warning; else -> DashColors.TextSecondary }
+    val colour = if (muted) DashColors.Muted else when (serious) { 2 -> DashColors.Critical; 1 -> DashColors.Warning; else -> DashColors.TextSecondary }
     val content: @Composable () -> Unit = { BoxWithConstraints {
         // A narrow tile gives the problem's words the whole row: where it comes from can go.
         val wide = maxWidth >= 380.dp
@@ -646,6 +661,7 @@ private fun ProblemRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, color = DashColors.TextPrimary, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (muted) MutedTag()
                 if (detail != null) {
                     Text(detail, color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
@@ -671,18 +687,42 @@ private fun ProblemRow(
             }
         }
     } }
-    val color = if (active) DashColors.Warning.copy(alpha = 0.14f) else DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f)
+    val lit = active && !muted
+    val color = if (lit) DashColors.Warning.copy(alpha = 0.14f) else DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f)
     val ring = when {
         selected -> Modifier.border(1.5.dp, colour, DashShape.Medium)
-        active -> Modifier.border(1.dp, DashColors.Warning.copy(alpha = 0.6f), DashShape.Medium)
+        lit -> Modifier.border(1.dp, DashColors.Warning.copy(alpha = 0.6f), DashShape.Medium)
         else -> Modifier
     }
     val tap = onSelect ?: onOpen
-    if (tap != null) {
-        Surface(onClick = tap, shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().then(ring)) { content() }
-    } else {
-        Surface(shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().then(ring)) { content() }
+    val muteLabel = stringResource(if (muted) R.string.diag_unmute else R.string.diag_mute)
+    // A tap keeps its meaning (turn the car, open the advice); a long tap mutes or unmutes the code.
+    val press = if (tap != null || onToggleMute != null) {
+        Modifier.clip(DashShape.Medium).combinedClickable(
+            onClick = { tap?.invoke() },
+            onLongClickLabel = muteLabel,
+            onLongClick = onToggleMute
+        )
+    } else Modifier
+    Surface(shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().alpha(if (muted) 0.55f else 1f).then(ring).then(press)) { content() }
+}
+
+/** The small "muted" mark under a muted code: the bell with a slash, and the word. */
+@Composable
+private fun MutedTag() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.NotificationsOff, contentDescription = null, tint = DashColors.TextSecondary, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(stringResource(R.string.diag_muted), color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
     }
+}
+
+/** What a long tap on a code runs: it is muted, or unmuted, with the tap feedback. */
+@Composable
+private fun rememberMuteToggle(): (String) -> Unit {
+    val context = LocalContext.current
+    val feedback = rememberTapFeedback()
+    return { code -> MutedCodes.toggle(context, code); feedback() }
 }
 
 /**
@@ -761,9 +801,12 @@ private val ModuleScan.answered: Boolean get() = outcome == ScanOutcome.OK || ou
 /** "12 faults in 8 modules · 2 active", and the button to the sheet. */
 @Composable
 private fun ModuleSummary(scans: List<ModuleScan>, onOpen: () -> Unit) {
+    val muted by MutedCodes.codes.collectAsState()
     val faulty = scans.filter { it.faulty }
-    val total = faulty.sumOf { maxOf(it.codes.size, it.countReported ?: 0) }
-    val active = scans.sumOf { s -> s.codes.count { it.status == DtcStatus.ACTIVE } }
+    // Muted codes are not counted as faults or as active: they get a count of their own.
+    val mutedCount = scans.sumOf { s -> s.codes.count { it.code in muted } }
+    val total = faulty.sumOf { maxOf(it.codes.size, it.countReported ?: 0) } - mutedCount
+    val active = scans.sumOf { s -> s.codes.count { it.status == DtcStatus.ACTIVE && it.code !in muted } }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             if (total > 0) {
@@ -771,6 +814,9 @@ private fun ModuleSummary(scans: List<ModuleScan>, onOpen: () -> Unit) {
                     pluralStringResource(R.plurals.diag_faults_in_modules, total, total, faulty.size),
                     color = DashColors.TextPrimary, style = MaterialTheme.typography.bodyLarge
                 )
+            }
+            if (mutedCount > 0) {
+                Text(stringResource(R.string.diag_muted_count, mutedCount), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
             }
             if (active > 0) {
                 Text(pluralStringResource(R.plurals.diag_active_count, active, active), color = DashColors.Warning, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
@@ -872,8 +918,11 @@ private fun ModulesSheet(
 
 /** One module with faults: its name, how many, its Clear, and each code with its status and meaning. */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ModuleBlock(scan: ModuleScan, canClear: Boolean, onClear: (DiagModule) -> Unit) {
     val reported = scan.countReported ?: scan.codes.size
+    val muted by MutedCodes.codes.collectAsState()
+    val toggleMute = rememberMuteToggle()
     Surface(shape = DashShape.Medium, color = DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -893,14 +942,20 @@ private fun ModuleBlock(scan: ModuleScan, canClear: Boolean, onClear: (DiagModul
                 }
             }
             scan.codes.forEach { d ->
-                val active = d.status == DtcStatus.ACTIVE
+                val isMuted = d.code in muted
+                val active = d.status == DtcStatus.ACTIVE && !isMuted
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = if (active) {
-                        Modifier.fillMaxWidth().clip(DashShape.Small).background(DashColors.Warning.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 4.dp)
-                    } else Modifier
+                    modifier = Modifier.fillMaxWidth().clip(DashShape.Small)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClickLabel = stringResource(if (isMuted) R.string.diag_unmute else R.string.diag_mute),
+                            onLongClick = { toggleMute(d.code) }
+                        )
+                        .alpha(if (isMuted) 0.55f else 1f)
+                        .let { if (active) it.background(DashColors.Warning.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 4.dp) else it }
                 ) {
-                    CodeBadge(d.code, if (d.status == DtcStatus.ACTIVE) Severity.STOP else null)
+                    CodeBadge(d.code, if (active) Severity.STOP else null, muted = isMuted)
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -909,9 +964,10 @@ private fun ModuleBlock(scan: ModuleScan, canClear: Boolean, onClear: (DiagModul
                         )
                         Text(
                             statusText(d.status),
-                            color = if (d.status == DtcStatus.ACTIVE) DashColors.Warning else DashColors.TextSecondary,
+                            color = if (active) DashColors.Warning else DashColors.TextSecondary,
                             style = MaterialTheme.typography.labelSmall
                         )
+                        if (isMuted) MutedTag()
                     }
                 }
             }
@@ -972,8 +1028,8 @@ private fun AiDisclaimer(d: Diagnosis, aiText: Resources) {
 
 /** A code on a coloured badge, the way a garage printout sets it apart. */
 @Composable
-private fun CodeBadge(code: String, severity: Severity?, large: Boolean = false) {
-    val color = severityColor(severity)
+private fun CodeBadge(code: String, severity: Severity?, large: Boolean = false, muted: Boolean = false) {
+    val color = if (muted) DashColors.Muted else severityColor(severity)
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))

@@ -101,7 +101,7 @@ internal object CarFacts {
         put("battery_volts") { Vehicle.bus.now(K.BATTERY_VOLTS) }
         put("headlights_on") { headlightsNow() }
         put("fault_codes") {
-            AiMechanic.state.value.let { s -> s.codes?.let { "codes=$it, diagnosis=${s.diagnosis}" } }
+            AiMechanic.state.value.let { s -> s.warningCodes?.let { "codes=$it, diagnosis=${s.diagnosis}" } }
         }
         put("pending_fault_codes") { ObdBluetoothManager.pending.value }
         put("servicing") { Maintenance.state.value.statuses(now) }

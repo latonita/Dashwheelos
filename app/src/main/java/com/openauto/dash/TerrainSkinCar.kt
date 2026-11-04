@@ -388,7 +388,7 @@ private fun Modifier.pinCard(tone: Color): Modifier {
 @Composable
 private fun rememberTerrainProblems(): List<MapProblem> {
     val ai by AiMechanic.state.collectAsState()
-    val codes = ai.codes
+    val codes = ai.warningCodes
     val diagnosis = ai.diagnosis
     val carMessages = rememberCarMessages().let { all ->
         if (codes.isNullOrEmpty()) all else all.filter { it.code !in PsaWarnings.engineLamp }

@@ -331,7 +331,7 @@ private fun faultCodesFace(env: SkinTileEnv): WidgetFace {
             idleFace(Icons.Filled.Warning, BuiltinKind.OBD_DTC.label, stringResource(R.string.design_no_scan_yet), action = scan)
         } else obdIdle(BuiltinKind.OBD_DTC, env, "")
     }
-    val codes = ai.codes.orEmpty()
+    val codes = ai.warningCodes.orEmpty()
     val titles = remember(ai, context) { codes.map { ai.description(it) ?: ObdCodes.describe(it).localizedTitle(context) } }
     val lampOn = lamp?.on == true
     val count = serious.size + codes.size
@@ -359,7 +359,7 @@ private fun faultCodesFace(env: SkinTileEnv): WidgetFace {
         stats = listOfNotNull(lamp?.let { FaceStat(stringResource(R.string.design_engine_lamp), stringResource(if (it.on) R.string.design_on else R.string.design_off)) }),
         actions = listOf(
             scan,
-            FaceAction(Icons.Filled.DeleteSweep, stringResource(R.string.vehicle_clear), enabled = connected && !busy && !sweeping && lone != null && codes.isNotEmpty(), onClick = clearCodes)
+            FaceAction(Icons.Filled.DeleteSweep, stringResource(R.string.vehicle_clear), enabled = connected && !busy && !sweeping && lone != null && ai.codes.orEmpty().isNotEmpty(), onClick = clearCodes)
         )
     )
 }

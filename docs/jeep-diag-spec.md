@@ -397,3 +397,20 @@ What must be checked on the car:
 - The first read comes 15 s after ACC on with the background check on. With it off, the read comes 3 s after
   connect. Check that only one start-up scan runs per ignition cycle.
 - The engine-start rescan, and that a periodic scan with no change stays silent.
+
+**Muting a code (2026-11-04).** A long tap on a code row (the tile's list and the "By module" sheet) mutes it, and
+another long tap unmutes it. `diag/MutedCodes.kt` keeps the set (prefs file `diag`, key `muted`, saved by the
+setup backup like every prefs file).
+- Keyed by the code ("U0184"), so one mute covers every module that reports it. A muted code stays muted
+  whatever its status (stored, pending or active) until it is long-tapped again.
+- A muted row is dimmed, has a grey number circle, a bell-off icon and the word "muted"; it never gets the active
+  highlight. It stays in the lists, and Clear still clears it. The car's own PSA messages cannot be muted.
+- `AiMechanic.State.muted` carries the set; `warningCodes` / `warningKeys` are `codes` / `faultKeys` without it.
+  Everything that warns reads those: the tile's verdict, banner count, circles and car-map spots; the Now card;
+  widget faces; Terrain and Brutal skins; car news; the start-up briefing; the automation `FAULT_CODES` event;
+  new-fault announcements and the new-fault moment (`newFaultAt`, so Canvas tabs and Moments stay quiet).
+  A scan where only a muted code changes is therefore silent.
+- The summaries count what warns ("3 faults in 2 modules", "1 active") and add "N muted" on a line of its own.
+- Gemini is not told about muted codes: they are left out of the prompt and the cache key, so the prompt is
+  byte-identical when nothing is muted. When every code is muted, no advice is asked. A change of the mute asks
+  again (from the cache when it can).

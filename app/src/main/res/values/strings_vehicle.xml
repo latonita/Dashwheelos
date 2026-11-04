@@ -266,6 +266,10 @@
     <string name="diag_outcome_no_response">No answer (probably not fitted)</string>
     <string name="diag_outcome_refused">Refused the request</string>
     <string name="diag_outcome_error">Adapter error</string>
+    <string name="diag_muted">muted</string>
+    <string name="diag_muted_count">%d muted</string>
+    <string name="diag_mute">Mute</string>
+    <string name="diag_unmute">Unmute</string>
     <string name="diag_status_active">Active</string>
     <string name="diag_status_pending">Pending</string>
     <string name="diag_status_stored">Stored</string>
