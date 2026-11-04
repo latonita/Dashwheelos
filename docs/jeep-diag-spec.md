@@ -1,6 +1,6 @@
 # Jeep module diagnostics for the Car errors tile — requirement and architecture
 
-Status: **spec only, not built.** Branch `clean/jeep-diag` (off `clean/base` = `6b1ecf15`).
+Status: **P1 (read-only sweep) and P2 (per-module clear) built**, with the scan scheduling of 4.9; see section 7. Branch `clean/jeep-diag` (off `clean/base` = `6b1ecf15`).
 Recorded 2026-11-04.
 
 ## 1. Requirement (from the user)
@@ -324,3 +324,76 @@ Proposed:
 - Q4. (Partly settled 2026-11-04) The user wants a manual scan (tap) **plus an optional periodic scan**
   every X minutes. With periodic on, the first read is 15 s after ACC on. With periodic off, today's
   automatic scans stay as they are (3 s after connect, once after engine start). See 4.9.
+
+## 7. Implementation notes (P1 + P2, 2026-11-04)
+
+Where the code is:
+- `diag/DiagScanner.kt`: the sweep (`sweep`) and the per-module clear (`clear`), plus the pure helpers
+  `decode`, `obd2Scan`, `merge`, `replace` and `sameAs`. `GenericObd` is the seam to today's
+  `readTroubleCodes` / `clearTroubleCodes`.
+- `diag/DiagSettings.kt`: the "Diagnostics" and "Background check" settings, plus a hidden-by-default
+  "Probe all modules" switch, in their own prefs file `diag` (`profile`, `periodic_min`, `probe_all`).
+  `resolve()` makes the Auto choice.
+- `DiagService.kt`: the one `DiagScanScheduler`, the profile in use, the sweep runner and the clear. It is
+  started by `VehicleMonitor.start`.
+- `AiMechanic.State` now holds `scans: List<ModuleScan>?`. `codes`, `faultKeys`, `where(code)` and
+  `description(code)` are derived from it.
+- UI: `FaultCodesTile.kt` (`ModuleSummary`, `ModulesSheet`, `ModuleBlock`, `rememberModuleClear`) and the
+  settings in `SettingsScreen.kt` (`DiagnosticsSettings`, in the OBD sheet under the route).
+
+Decisions beyond the spec:
+- **Generic profile = today's code path.** A profile that is only the generic module goes through
+  `readTroubleCodes` unchanged: the 0101 lamp, 03 + 07 broadcast, the 7E0 retry and its failure messages.
+  Stored codes become STORED and mode-07-only codes PENDING (from `ObdBluetoothManager.pending`). The
+  fingerprint is the sorted `code:status` list, so the order of the reply is not a change.
+- **The generic clear now reads again** after mode 04 (spec 4.8, "after a clear, that module is read
+  again"). If that read fails, the module is taken as clean, which is what the tile showed before.
+- **A failed sweep changes nothing.** When no module answers at all (`NO_RESPONSE`/`ERROR` everywhere), the
+  sweep fails with today's "didn't answer" message and the state is kept.
+- **An adapter error keeps the module's last answer** (`merge`): a Bluetooth clone's glitch would otherwise
+  make a module's codes vanish and come back. `NO_RESPONSE` is taken as read: the module may really be gone.
+- **Silent periodic scans.** When every module gives the same outcome and fingerprint as before, the state is
+  only stamped (`scannedAt`): there is no Gemini call, no voice, no `newFaultAt`, and no automation event. The
+  exception is when the last Gemini ask failed (`canRetry`): then a scan asks again, as before. The stamp lets
+  the start-up briefing still see this start's scan.
+- **The automation `FAULT_CODES` event** fires on a change of `faultKeys` (module, code, status), so stored →
+  active counts as a change. Its extra stays the comma-joined code list.
+- **known_codes**: the entries are `MODULE:CODE:time`. Old `CODE:time` and bare `CODE` entries are read as
+  `ENGINE:CODE`, the generic module's id. So on a Jeep, the PCM's codes count as new once after the switch.
+  This is deliberate: the Jeep's engine is `PCM`, not the generic `ENGINE`. A clear forgets only that
+  module's entries.
+- **Gemini**: the prompt gets one more line naming the module(s) and status of each code, only for a module
+  profile. A generic scan's prompt is byte-for-byte as before (tested). The answer cache key carries the
+  module map for module profiles only, so cached generic answers stay valid.
+- **Unknown ignition.** On a unit whose `ignitionFlow()` is null, ACC follows the OBD link, so each
+  connection is a new cycle with its own start-up scan, as the 3 s connect scan was before.
+- **Rpm feed**: `DiagService.onRpm` is called from the OBD poll loop, where `RescanAfterStart` used to be
+  fed. `RescanAfterStart` and its two tests are gone; `DiagScanSchedulerTest` covers the same rules.
+- **The scheduler skips while a clear runs**: `canScan` is also false while the sweep/clear mutex is held,
+  and the demo never scans by itself. The demo's codes stay generic: the profile is Generic while the demo
+  runs.
+- **Clear UI.** With one module (generic), Clear clears it directly after the usual confirm, as before. With
+  several, Clear opens the module sheet, where each module with faults has its own Clear. SENSITIVE modules
+  get a second dialog. The home-screen widget face offers Clear only for a one-module profile.
+- **Tile.** The numbered list stays one row per distinct code (the map and the AI advice are per code). For
+  a module profile, the row's second line names the modules and status ("PCM active, TCM stored"). A summary
+  line ("16 faults in 9 modules", "2 active") and a "By module" button sit under the list. The progress
+  ("Reading ABS…") shows under the progress bar and, on a short tile, in place of the names.
+- **The module sheet's count** is the module's own `n` (PARTIAL shows "N faults (the adapter shows only the
+  first M)"). The banner's count stays the distinct codes plus the car's messages.
+- **PSA gating.** The car's own messages and the Citroën "OBD only sees the engine" note show only when
+  `isPsa(make)`. The C4 Picasso fallback hint is replaced by a make-neutral one for non-PSA cars, including
+  a car with no make set; that is a visible change for profiles without a make.
+- **Probe all modules** is a settings switch (off by default), not wired anywhere else (spec P5).
+- **Not done (out of P1/P2):** the 01 01 "cheap engine check" in the gauge poll, mode 09 VIN read,
+  identification `1A 87`, freeze frame, and the engine-lamp read for the Jeep sweep (the lamp stays from the
+  last generic read, or none).
+
+What must be checked on the car:
+- A sweep reproduces `live_dtc_scan.csv`, with both the OBDLink EX on USB and a Bluetooth ELM327 clone.
+  With the clone, check whether the modules outside 7E0–7E7 come back PARTIAL.
+- The time a sweep takes, and that the gauges keep moving during it.
+- Clearing one NORMAL module (for example CCN) and then reading it again. Check that `7F 14 78` is waited out.
+- The first read comes 15 s after ACC on with the background check on. With it off, the read comes 3 s after
+  connect. Check that only one start-up scan runs per ignition cycle.
+- The engine-start rescan, and that a periodic scan with no change stays silent.
