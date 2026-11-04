@@ -285,7 +285,8 @@ internal fun ObdDtcCard(
                     pending = !byModule && (code in pending || where.any { it.second.status == DtcStatus.PENDING }),
                     onOpen = if (advice != null) ({ opened = code }) else null,
                     selected = in3d && turnedTo == number,
-                    onSelect = if (in3d && mapProblems.any { it.number == number }) ({ picked = number }) else null
+                    onSelect = if (in3d && mapProblems.any { it.number == number }) ({ picked = number }) else null,
+                    active = where.any { it.second.status == DtcStatus.ACTIVE }
                 )
             }
         }
@@ -630,7 +631,9 @@ private fun ProblemRow(
     /** The car in 3D is turned to it. */
     selected: Boolean = false,
     /** Turns the car in 3D to it; the details then open from the arrow alone. */
-    onSelect: (() -> Unit)? = null
+    onSelect: (() -> Unit)? = null,
+    /** A module reports it as present now: the row is tinted and outlined in the warning colour. */
+    active: Boolean = false
 ) {
     val colour = when (serious) { 2 -> DashColors.Critical; 1 -> DashColors.Warning; else -> DashColors.TextSecondary }
     val content: @Composable () -> Unit = { BoxWithConstraints {
@@ -668,8 +671,12 @@ private fun ProblemRow(
             }
         }
     } }
-    val color = DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f)
-    val ring = if (selected) Modifier.border(1.5.dp, colour, DashShape.Medium) else Modifier
+    val color = if (active) DashColors.Warning.copy(alpha = 0.14f) else DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f)
+    val ring = when {
+        selected -> Modifier.border(1.5.dp, colour, DashShape.Medium)
+        active -> Modifier.border(1.dp, DashColors.Warning.copy(alpha = 0.6f), DashShape.Medium)
+        else -> Modifier
+    }
     val tap = onSelect ?: onOpen
     if (tap != null) {
         Surface(onClick = tap, shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().then(ring)) { content() }
@@ -886,7 +893,13 @@ private fun ModuleBlock(scan: ModuleScan, canClear: Boolean, onClear: (DiagModul
                 }
             }
             scan.codes.forEach { d ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val active = d.status == DtcStatus.ACTIVE
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = if (active) {
+                        Modifier.fillMaxWidth().clip(DashShape.Small).background(DashColors.Warning.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 4.dp)
+                    } else Modifier
+                ) {
                     CodeBadge(d.code, if (d.status == DtcStatus.ACTIVE) Severity.STOP else null)
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
