@@ -90,12 +90,10 @@ data class WheelMap(val from: Map<TyrePos, TyrePos>) {
   - "Reset wheel order" (only when the map isn't the identity)
 - Choosing a wheel swaps the two. The menu is the confirmation; there is no second dialog.
 - **Gestures:**
-  - A wheel cell claims its long-press by hit-testing: `detectPageHold` is a sibling Box under the tiles, so a
-    `pointerInput` on the wheel cell hides it from that Box and the hold never starts there. (No change in
-    `DashboardGrid` was needed.) A
-    long-press on the tile header or the gaps still enters edit mode.
+  - The wheel menu exists **only in normal mode**. `TyresCard` gets the `editing` flag from `DashboardGrid` and
+    `wheelMenuAllowed(editing)` is false in edit mode, so the wheel cells have no gesture there. This does not
+    rely on the edit scrim covering the tile. Edit mode keeps its own tile features unchanged.
   - A short tap on a wheel does nothing new.
-  - In edit mode the scrim covers the tile, so wheels can't be tapped. That is fine.
 - **Indicator.** While the map isn't the identity, the tile header shows a small "swapped" mark (an icon
   or text), so the user knows the order is corrected.
 - **Tile panel** (`TileOptions.kt`, edit mode): a "Reset wheel order" row for the Tyres tile, shown only

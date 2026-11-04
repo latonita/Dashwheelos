@@ -772,7 +772,7 @@ internal fun TileContent(
             BuiltinKind.SERVICE -> ServiceCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.FUEL_PRICES -> FuelPricesCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.CAR_STATUS -> CarStatusCard(modifier = Modifier.fillMaxSize())
-            BuiltinKind.TYRES -> TyresCard(modifier = Modifier.fillMaxSize())
+            BuiltinKind.TYRES -> TyresCard(modifier = Modifier.fillMaxSize(), editing = editing)
         } }
 
         is DashboardItem.SystemWidget -> if (editing) {

@@ -307,9 +307,15 @@ internal val TyreProblem.labelRes: Int
         TyreProblem.HOT -> R.string.car_tyres_hot
     }
 
+/**
+ * The wheel long-press menu is for normal (display) mode only: in dashboard edit mode the tile keeps its own edit
+ * features (drag, panel with Reset wheel order), whatever covers it. Gated on the editing flag itself, not on a scrim.
+ */
+internal fun wheelMenuAllowed(editing: Boolean): Boolean = !editing
+
 /** The Tyres tile: the four tyres, from the TPMS sensors. */
 @Composable
-internal fun TyresCard(modifier: Modifier = Modifier) {
+internal fun TyresCard(modifier: Modifier = Modifier, editing: Boolean) {
     val tyres = rememberTyres()
     val problems by Tyres.problems.collectAsState()
     val unit by Tyres.unit.collectAsState()
@@ -324,7 +330,7 @@ internal fun TyresCard(modifier: Modifier = Modifier) {
             if (tyres.isEmpty()) {
                 Text(stringResource(R.string.car_tyres_waiting), color = DashColors.Muted, style = MaterialTheme.typography.bodyMedium)
             } else {
-                TyreGrid(tyres, problems, unit, Modifier.fillMaxWidth().weight(1f), large = true, remappable = true)
+                TyreGrid(tyres, problems, unit, Modifier.fillMaxWidth().weight(1f), large = true, remappable = wheelMenuAllowed(editing))
             }
         }
     }

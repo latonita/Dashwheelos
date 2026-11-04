@@ -103,4 +103,10 @@ class WheelMapTest {
         assertEquals(tyre(180), swapped[rl])
         assertTrue(tyreProblems(swapped, emptyMap(), 0, car).isEmpty())
     }
+
+    @Test
+    fun theWheelMenuIsForNormalModeOnly() {
+        assertTrue(wheelMenuAllowed(editing = false))
+        assertFalse(wheelMenuAllowed(editing = true))
+    }
 }
