@@ -1,6 +1,6 @@
 # Tyre wheel remap: requirement and design
 
-Status: **spec, being built.** Branch `clean/tyre-remap` (made from `clean/base` = `6b1ecf15`).
+Status: **built.** Branch `clean/tyre-remap` (made from `clean/base` = `6b1ecf15`).
 Recorded 2026-11-04.
 
 ## 1. Requirement (from the user)
@@ -69,8 +69,8 @@ data class WheelMap(val from: Map<TyrePos, TyrePos>) {
 - **Per source.** Different sources can have different errors: a car swapped from canbox TPMS to a USB
   receiver must not inherit the canbox's fix. So the map is stored **per bus source id** (for example
   `tpms.usb`, the canbox source or the syt app), using the source that currently provides `K.TYRES`.
-  - If the bus can't say which source provides the current value, fall back to a single global map, and
-    record that in the code and this spec.
+  - The bus can say: `Vehicle.bus.sample(K.TYRES).source.id`. So there is **no global fallback**; with no
+    source (no tyres heard) there is nothing to remap and nothing to long-tap.
 - `TyreAlertOverlay` reads the corrected data via `tyresFlow` like everything else.
 
 ### 3.3 Storage
@@ -79,7 +79,8 @@ data class WheelMap(val from: Map<TyrePos, TyrePos>) {
   `set`).
 - One key per source id. The value is 4 letters in FL FR RL RR order, each naming the raw source wheel:
   identity is `FL,FR,RL,RR`, and a FL↔RR swap is `RR,FR,RL,FL`.
-- It is added to the setup backup if `map_tile` is in it (check how the backup lists prefs).
+- The setup backup (`SetupBackup.readAll`) saves every prefs file, so `tyre_wheel_map` is in it without a change.
+- `MapTileOptions` is not on `clean/base`; the store follows `QuickSwitchStore` (`WheelMaps`, `load` from `Tyres.start`).
 
 ### 3.4 UI
 
@@ -89,7 +90,9 @@ data class WheelMap(val from: Map<TyrePos, TyrePos>) {
   - "Reset wheel order" (only when the map isn't the identity)
 - Choosing a wheel swaps the two. The menu is the confirmation; there is no second dialog.
 - **Gestures:**
-  - A wheel cell must claim its long-press before `detectPageHold`, which sees the Initial pass. A
+  - A wheel cell claims its long-press by hit-testing: `detectPageHold` is a sibling Box under the tiles, so a
+    `pointerInput` on the wheel cell hides it from that Box and the hold never starts there. (No change in
+    `DashboardGrid` was needed.) A
     long-press on the tile header or the gaps still enters edit mode.
   - A short tap on a wheel does nothing new.
   - In edit mode the scrim covers the tile, so wheels can't be tapped. That is fine.

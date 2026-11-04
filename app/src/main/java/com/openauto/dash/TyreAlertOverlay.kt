@@ -21,6 +21,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.openauto.dash.vehicle.Vehicle
+import com.openauto.dash.vehicle.K
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -191,12 +200,12 @@ private fun TyreAlert(tyres: Map<TyrePos, Tyre>, style: AlertStyle) {
  * unit and temperature, the one with a problem framed in red and named.
  */
 @Composable
-internal fun TyreGrid(tyres: Map<TyrePos, Tyre>, problems: Map<TyrePos, TyreProblem>, unit: PressureUnit, modifier: Modifier = Modifier, large: Boolean) {
+internal fun TyreGrid(tyres: Map<TyrePos, Tyre>, problems: Map<TyrePos, TyreProblem>, unit: PressureUnit, modifier: Modifier = Modifier, large: Boolean, remappable: Boolean = false) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(if (large) 14.dp else 8.dp)) {
         listOf(TyrePos.FRONT_LEFT to TyrePos.FRONT_RIGHT, TyrePos.REAR_LEFT to TyrePos.REAR_RIGHT).forEach { (left, right) ->
             Row(Modifier.fillMaxWidth().weight(1f, fill = large), horizontalArrangement = Arrangement.spacedBy(if (large) 14.dp else 8.dp)) {
-                TyreCell(left, tyres[left], problems[left], unit, Modifier.weight(1f).then(if (large) Modifier.fillMaxHeight() else Modifier), large)
-                TyreCell(right, tyres[right], problems[right], unit, Modifier.weight(1f).then(if (large) Modifier.fillMaxHeight() else Modifier), large)
+                TyreCell(left, tyres[left], problems[left], unit, Modifier.weight(1f).then(if (large) Modifier.fillMaxHeight() else Modifier), large, remappable)
+                TyreCell(right, tyres[right], problems[right], unit, Modifier.weight(1f).then(if (large) Modifier.fillMaxHeight() else Modifier), large, remappable)
             }
         }
     }
@@ -216,10 +225,15 @@ private fun rememberTyreProblems(tyres: Map<TyrePos, Tyre>): Map<TyrePos, TyrePr
 }
 
 @Composable
-private fun TyreCell(pos: TyrePos, tyre: Tyre?, problem: TyreProblem?, unit: PressureUnit, modifier: Modifier, large: Boolean) {
+private fun TyreCell(pos: TyrePos, tyre: Tyre?, problem: TyreProblem?, unit: PressureUnit, modifier: Modifier, large: Boolean, remappable: Boolean = false) {
     val fill = if (DashColors.Glass) DashColors.haze(0.06f) else DashColors.CardHi
+    var menu by remember { mutableStateOf(false) }
+    // The wheel claims its own long-press, so the page hold (DashboardGrid.detectPageHold, a sibling under the
+    // tiles) is never hit here; a hold on the header or the gaps still arranges the page.
+    val hold = if (remappable) Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { menu = true }) } else Modifier
     Column(
         modifier = modifier
+            .then(hold)
             .itemFill(fill, DashShape.Medium)
             .then(if (problem != null) Modifier.border(2.dp, DashColors.Critical, DashShape.Medium) else Modifier)
             .padding(horizontal = 12.dp, vertical = if (large) 12.dp else 8.dp),
@@ -247,6 +261,32 @@ private fun TyreCell(pos: TyrePos, tyre: Tyre?, problem: TyreProblem?, unit: Pre
             else -> DashColors.TextSecondary
         }
         note?.let { Text(it, color = noteColor, maxLines = 1, style = MaterialTheme.typography.bodySmall) }
+        if (remappable && menu) WheelRemapMenu(pos) { menu = false }
+    }
+}
+
+/** "FL data is really from: FR / RL / RR", and Reset while the order is swapped; choosing one swaps the two wheels. */
+@Composable
+private fun WheelRemapMenu(pos: TyrePos, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val sample by Vehicle.bus.sample(K.TYRES).collectAsState()
+    val maps by WheelMaps.maps.collectAsState()
+    val source = sample?.source?.id ?: run { onDismiss(); return }
+    val map = WheelMaps.of(maps, source)
+    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        DropdownMenuItem(text = { Text(stringResource(R.string.car_tyres_remap_title, pos.code ?: ""), fontWeight = FontWeight.Bold) }, onClick = {}, enabled = false)
+        listOf(TyrePos.FRONT_LEFT, TyrePos.FRONT_RIGHT, TyrePos.REAR_LEFT, TyrePos.REAR_RIGHT).filter { it != pos }.forEach { other ->
+            DropdownMenuItem(text = { Text(other.code ?: "") }, onClick = {
+                WheelMaps.set(context, source, map.swap(pos, other))
+                onDismiss()
+            })
+        }
+        if (!map.isIdentity) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.car_tyres_remap_reset)) }, onClick = {
+                WheelMaps.reset(context, source)
+                onDismiss()
+            })
+        }
     }
 }
 
@@ -273,13 +313,18 @@ internal fun TyresCard(modifier: Modifier = Modifier) {
     val tyres = rememberTyres()
     val problems by Tyres.problems.collectAsState()
     val unit by Tyres.unit.collectAsState()
+    val sample by Vehicle.bus.sample(K.TYRES).collectAsState()
+    val maps by WheelMaps.maps.collectAsState()
+    val swapped = !WheelMaps.of(maps, sample?.source?.id).isIdentity
     Card(modifier = modifier) {
         Column(Modifier.fillMaxSize().padding(DashSpace.Lg), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TileHeader(stringResource(R.string.car_tyres_title))
+            TileHeader(stringResource(R.string.car_tyres_title)) {
+                if (swapped) Text(stringResource(R.string.car_tyres_swapped), color = DashColors.Warning, style = MaterialTheme.typography.labelSmall)
+            }
             if (tyres.isEmpty()) {
                 Text(stringResource(R.string.car_tyres_waiting), color = DashColors.Muted, style = MaterialTheme.typography.bodyMedium)
             } else {
-                TyreGrid(tyres, problems, unit, Modifier.fillMaxWidth().weight(1f), large = true)
+                TyreGrid(tyres, problems, unit, Modifier.fillMaxWidth().weight(1f), large = true, remappable = true)
             }
         }
     }

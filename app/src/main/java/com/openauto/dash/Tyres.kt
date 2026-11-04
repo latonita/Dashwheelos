@@ -99,6 +99,7 @@ object Tyres {
     fun start(context: Context) {
         if (started) return
         val app = context.applicationContext
+        WheelMaps.load(app)
         if (!UnitPlatform.hasPackage(app, TPMS_PACKAGE)) return
         started = true
         ContextCompat.registerReceiver(app, receiver, IntentFilter(ACTION), ContextCompat.RECEIVER_EXPORTED)
