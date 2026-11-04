@@ -227,7 +227,9 @@ Proposed:
 - **Periodic:** a setting "Background check: Off / 5 / 10 / 15 / 30 min", **Off by default**.
   - **First read: 15 s after ACC on** (user, 2026-11-04).
     - **The ACC-on source is the canbox** (user, 2026-11-04): Hiworld JPF2 frame `0x72` STATE, byte 0,
-      bit 0 = ACC, so ACC on is that bit going 0 → 1.
+      bit 0 = ACC, so ACC on is that bit going 0 → 1. The stock `0x72` flags carry both ACC and IGN.
+    - Only the stock frame is used. The decoder for our rebuilt firmware's custom commands
+      (`Jpf20lDecoder`) is not changed.
     - Today the decoder only documents this bit (`HiworldJpf2Decoder.kt:12`) and doesn't publish it.
     - `XyautoAdapter` takes `K.IGNITION` from the vendor `xy.android.acc.on` broadcast
       (`AccBroadcastIgnition`).
