@@ -274,9 +274,9 @@ private fun WheelRemapMenu(pos: TyrePos, onDismiss: () -> Unit) {
     val source = sample?.source?.id ?: run { onDismiss(); return }
     val map = WheelMaps.of(maps, source)
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-        DropdownMenuItem(text = { Text(stringResource(R.string.car_tyres_remap_title, pos.code ?: ""), fontWeight = FontWeight.Bold) }, onClick = {}, enabled = false)
+        DropdownMenuItem(text = { Text(stringResource(R.string.car_tyres_remap_title, stringResource(pos.labelRes)), fontWeight = FontWeight.Bold) }, onClick = {}, enabled = false)
         listOf(TyrePos.FRONT_LEFT, TyrePos.FRONT_RIGHT, TyrePos.REAR_LEFT, TyrePos.REAR_RIGHT).filter { it != pos }.forEach { other ->
-            DropdownMenuItem(text = { Text(other.code ?: "") }, onClick = {
+            DropdownMenuItem(text = { Text(stringResource(other.labelRes)) }, onClick = {
                 WheelMaps.set(context, source, map.swap(pos, other))
                 onDismiss()
             })
