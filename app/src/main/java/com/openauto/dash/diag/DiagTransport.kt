@@ -185,7 +185,8 @@ class DiagTransport(
         val cra = ok(link.send("ATCRA7E8", AT_TIMEOUT_MS))
         val fcsh = ok(link.send("ATFCSH7E0", AT_TIMEOUT_MS))
         val fcsd = fcsh && ok(link.send("ATFCSD300000", AT_TIMEOUT_MS))
-        val fcsm = fcsd && ok(link.send("ATFCSM1", AT_TIMEOUT_MS))
+        // Asked twice: one lost "OK" must not cost every module outside 7E0-7E7 its flow control.
+        val fcsm = fcsd && (ok(link.send("ATFCSM1", AT_TIMEOUT_MS)) || ok(link.send("ATFCSM1", AT_TIMEOUT_MS)))
         val silent = sti == null && !cra && !fcsh
         // Put it back whatever it took.
         if (fcsm || fcsd) link.send("ATFCSM0", AT_TIMEOUT_MS)

@@ -193,6 +193,7 @@ internal object UsbObd {
                 if (!answers) continue
                 Log.i(TAG, "USB ${adapter.key} (${adapter.label}) answers at $baud baud")
                 if (baud != saved) prefs(context).edit().putInt(KEY_BAUD, baud).apply()
+                link.start()
                 return Opened.Streams(link.input, link.output)
             }
         } catch (e: IOException) {
@@ -237,45 +238,89 @@ internal object UsbObd {
     private const val WRITE_TIMEOUT_MS = 1_000
 
     /**
-     * The port as the streams [ObdBluetoothManager] reads and writes: a USB
-     * read is a call with a timeout, not a stream that says how much is
-     * waiting, so [available] reads ahead a little.
+     * The port as the streams [ObdBluetoothManager] reads and writes. One reader thread blocks on
+     * `port.read(buffer, 0)` and fills a buffer the streams read from.
+     *
+     * A read with a timeout goes through `bulkTransfer`, which on this unit (API 27) lost a whole USB packet when
+     * the timeout ran out as the packet came in: a long ISO-TP reply lost its first 62 characters, and a short
+     * "OK" went missing. A read without a timeout goes through `UsbRequest` and loses nothing.
      */
     private class PortLink(private val port: UsbSerialPort) {
-        private val chunk = ByteArray(READ_CHUNK)
+        private val lock = Object()
+        private var data = ByteArray(READ_CHUNK)
         private var start = 0
         private var end = 0
         @Volatile private var closed = false
+        @Volatile private var failure: IOException? = null
+        private var reader: Thread? = null
+
+        /** Starts the reader. Before this, the speed probe reads the port directly. */
+        fun start() {
+            if (reader != null) return
+            reader = Thread({
+                val buffer = ByteArray(READ_CHUNK)
+                while (!closed) {
+                    val n = try {
+                        port.read(buffer, 0)
+                    } catch (e: IOException) {
+                        if (!closed) failure = e
+                        break
+                    } catch (e: RuntimeException) {
+                        if (!closed) failure = IOException(e)
+                        break
+                    }
+                    if (n > 0) synchronized(lock) {
+                        if (end + n > data.size) {
+                            // Compact, then grow if still short.
+                            val keep = end - start
+                            val grown = if (keep + n > data.size) ByteArray(maxOf(data.size * 2, keep + n)) else data
+                            System.arraycopy(data, start, grown, 0, keep)
+                            data = grown; start = 0; end = keep
+                        }
+                        System.arraycopy(buffer, 0, data, end, n)
+                        end += n
+                        lock.notifyAll()
+                    }
+                }
+                synchronized(lock) { lock.notifyAll() }
+            }, "UsbObd-reader").apply { isDaemon = true; start() }
+        }
 
         fun close() {
             if (closed) return
             closed = true
             runCatching { port.close() }
+            synchronized(lock) { lock.notifyAll() }
         }
 
-        private fun fill(timeoutMs: Int): Int {
-            if (closed) throw IOException("USB link closed")
+        /** Bytes waiting, after waiting up to [timeoutMs] for some. */
+        private fun fill(timeoutMs: Long): Int = synchronized(lock) {
+            if (start == end && !closed && failure == null && timeoutMs > 0) lock.wait(timeoutMs)
             if (start < end) return end - start
-            start = 0
-            end = port.read(chunk, timeoutMs).coerceAtLeast(0)
-            return end
+            failure?.let { throw it }
+            if (closed) throw IOException("USB link closed")
+            0
         }
 
         val input = object : InputStream() {
-            override fun available(): Int = synchronized(this) { fill(AVAILABLE_POLL_MS) }
+            override fun available(): Int = fill(0)
 
-            override fun read(): Int = synchronized(this) {
-                while (fill(BLOCKING_POLL_MS) == 0) Unit
-                chunk[start++].toInt() and 0xFF
+            override fun read(): Int {
+                while (true) synchronized(lock) {
+                    if (fill(BLOCKING_POLL_MS) > 0) return data[start++].toInt() and 0xFF
+                }
             }
 
-            override fun read(b: ByteArray, off: Int, len: Int): Int = synchronized(this) {
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
                 if (len == 0) return 0
-                while (fill(BLOCKING_POLL_MS) == 0) Unit
-                val n = minOf(len, end - start)
-                System.arraycopy(chunk, start, b, off, n)
-                start += n
-                n
+                while (true) synchronized(lock) {
+                    if (fill(BLOCKING_POLL_MS) > 0) {
+                        val n = minOf(len, end - start)
+                        System.arraycopy(data, start, b, off, n)
+                        start += n
+                        return n
+                    }
+                }
             }
 
             override fun close() = this@PortLink.close()
@@ -293,8 +338,7 @@ internal object UsbObd {
         }
 
         private companion object {
-            const val AVAILABLE_POLL_MS = 10
-            const val BLOCKING_POLL_MS = 200
+            const val BLOCKING_POLL_MS = 200L
         }
     }
 }
