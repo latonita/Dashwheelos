@@ -383,4 +383,20 @@
     <string name="alerts_group_car">From the car</string>
     <string name="alerts_group_road">On the road</string>
     <string name="alerts_group_start">Start of a drive</string>
+    <!-- Diagnostics (fault codes) -->
+    <string name="settings_diag_profile_label">Diagnostics</string>
+    <string name="settings_diag_auto">Automatic</string>
+    <string name="settings_diag_generic">Generic OBD-II</string>
+    <string name="settings_diag_jeep_wk">Jeep WK</string>
+    <string name="settings_diag_auto_hint">Jeep WK when the car\'s VIN or make is a Jeep, else generic OBD-II. Now: %1$s.</string>
+    <string name="settings_diag_generic_hint">Engine fault codes only (OBD-II modes 03 and 07), as any car has them.</string>
+    <string name="settings_diag_jeep_wk_hint">Reads every module of a 2005–2010 Jeep Grand Cherokee or Commander: engine, gearbox, ABS, airbags, body and the rest.</string>
+    <string name="settings_diag_periodic_label">Background check</string>
+    <string name="settings_diag_periodic_off">Off</string>
+    <string name="settings_diag_periodic_min">%1$d min</string>
+    <string name="settings_diag_periodic_off_hint">Fault codes are read when the adapter connects, once more after the engine starts, and when you tap Scan.</string>
+    <string name="settings_diag_periodic_hint">Fault codes are read 15 s after the ignition comes on, then every %1$d minutes while the adapter is connected. Only a change is shown or said.</string>
+    <string name="settings_diag_probe_all">Probe all modules</string>
+    <string name="settings_diag_probe_all_on">Also asks the modules this car may not have: a scan takes a few seconds longer.</string>
+    <string name="settings_diag_probe_all_off">Only the modules known to answer on this car are asked.</string>
 </resources>

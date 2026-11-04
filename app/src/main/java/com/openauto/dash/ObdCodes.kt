@@ -27,8 +27,13 @@ data class DtcInfo(
         else context.getString(titleRes, *titleParts.map { context.getString(it) }.toTypedArray())
 
     fun localizedFix(context: Context): String =
-        if (fixRes == R.string.vehicle_dtc_fallback_fix) context.getString(fixRes, code) else context.getString(fixRes)
+        if (fixRes == R.string.vehicle_dtc_fallback_fix) context.getString(fallbackFixRes(), code) else context.getString(fixRes)
 }
+
+/** The fallback hint names the C4 Picasso, the car the table was written for: only for a PSA car. */
+@StringRes
+internal fun fallbackFixRes(): Int =
+    if (PsaTripComputer.forThisCar()) R.string.vehicle_dtc_fallback_fix else R.string.vehicle_dtc_fallback_fix_any
 
 /** The code's localized meaning, for Compose. */
 @Composable
@@ -39,7 +44,7 @@ fun DtcInfo.localizedTitle(): String =
 /** The code's localized fix hint, for Compose. */
 @Composable
 fun DtcInfo.localizedFix(): String =
-    if (fixRes == R.string.vehicle_dtc_fallback_fix) stringResource(fixRes, code) else stringResource(fixRes)
+    if (fixRes == R.string.vehicle_dtc_fallback_fix) stringResource(fallbackFixRes(), code) else stringResource(fixRes)
 
 /**
  * Explains OBD-II Diagnostic Trouble Codes. Contains the common generic codes

@@ -48,6 +48,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TimerOff
+import androidx.compose.material.icons.filled.Search
+import com.openauto.dash.diag.DiagChoice
+import com.openauto.dash.diag.DiagSettings
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.AcUnit
@@ -595,8 +599,89 @@ private fun ObdSheet(onPickObd: () -> Unit, onDismiss: () -> Unit) {
                     scope.launch { if (on) VehicleMonitor.connectSaved() else ObdBluetoothManager.disconnect() }
                 }
                 ObdRouteSetting()
+                DiagnosticsSettings()
             }
         }
+    }
+}
+
+/**
+ * Which fault-code profile is read (Automatic follows the car's VIN and make), the background check, and whether
+ * the modules this car may lack are asked too. Stored in [DiagSettings]; the scans are [DiagService]'s.
+ */
+@Composable
+private fun DiagnosticsSettings() {
+    val context = LocalContext.current
+    val car by CarProfileStore.profile.collectAsState()
+    var choice by remember { mutableStateOf(DiagSettings.choice(context)) }
+    var minutes by remember { mutableStateOf(DiagSettings.periodicMinutes(context)) }
+    var probeAll by remember { mutableStateOf(DiagSettings.probeAll(context)) }
+    val label: @Composable (DiagChoice) -> String = { option ->
+        stringResource(
+            when (option) {
+                DiagChoice.AUTO -> R.string.settings_diag_auto
+                DiagChoice.GENERIC -> R.string.settings_diag_generic
+                DiagChoice.JEEP_WK -> R.string.settings_diag_jeep_wk
+            }
+        )
+    }
+    Text(
+        stringResource(R.string.settings_diag_profile_label),
+        color = DashColors.TextSecondary,
+        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 8.dp)
+    )
+    SegmentedSwitch(
+        options = DiagChoice.entries,
+        chosen = choice,
+        icon = { option ->
+            when (option) {
+                DiagChoice.AUTO -> Icons.Filled.AutoAwesome
+                DiagChoice.GENERIC -> Icons.Filled.Build
+                DiagChoice.JEEP_WK -> Icons.Filled.DirectionsCar
+            }
+        },
+        title = label,
+        onChoose = { option ->
+            choice = option
+            DiagSettings.setChoice(context, option)
+        }
+    )
+    SwitchHint(
+        when (choice) {
+            DiagChoice.AUTO -> stringResource(R.string.settings_diag_auto_hint, label(DiagSettings.resolve(choice, car.vin, car.make)))
+            DiagChoice.GENERIC -> stringResource(R.string.settings_diag_generic_hint)
+            DiagChoice.JEEP_WK -> stringResource(R.string.settings_diag_jeep_wk_hint)
+        }
+    )
+    Text(
+        stringResource(R.string.settings_diag_periodic_label),
+        color = DashColors.TextSecondary,
+        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 8.dp)
+    )
+    SegmentedSwitch(
+        options = DiagSettings.PERIODIC_OPTIONS,
+        chosen = minutes,
+        icon = { m -> if (m == 0) Icons.Filled.TimerOff else Icons.Filled.Timer },
+        title = { m -> if (m == 0) stringResource(R.string.settings_diag_periodic_off) else stringResource(R.string.settings_diag_periodic_min, m) },
+        onChoose = { m ->
+            minutes = m
+            DiagService.setPeriodicMinutes(context, m)
+        }
+    )
+    SwitchHint(
+        if (minutes == 0) stringResource(R.string.settings_diag_periodic_off_hint)
+        else stringResource(R.string.settings_diag_periodic_hint, minutes)
+    )
+    SettingsToggle(
+        Icons.Filled.Search, stringResource(R.string.settings_diag_probe_all),
+        stringResource(if (probeAll) R.string.settings_diag_probe_all_on else R.string.settings_diag_probe_all_off), probeAll
+    ) { on ->
+        probeAll = on
+        DiagSettings.setProbeAll(context, on)
     }
 }
 
