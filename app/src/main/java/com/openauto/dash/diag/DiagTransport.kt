@@ -92,6 +92,8 @@ class DiagTransport(
     @Volatile private var state: LinkSettings? = null
     /** Whether the adapter may be off the generic state because of us. */
     @Volatile private var touched = false
+    /** The adapter is known to be on 11-bit CAN (protocol 6 or 8), not searching. */
+    @Volatile private var canProtocol = false
     private val depth = AtomicInteger(0)
 
     /** Probed once per connection and cached. All false when there is no link or it said nothing. */
@@ -140,6 +142,7 @@ class DiagTransport(
     fun noteForeign(command: String) {
         val c = command.trim().uppercase()
         if (!c.startsWith("AT")) return
+        if (c == "ATD" || PROTOCOL_RESETS.any { c.startsWith(it) }) canProtocol = false
         if (HARMLESS.any { c.startsWith(it) }) return
         state = null
     }
@@ -149,10 +152,33 @@ class DiagTransport(
         caps = null
         state = null
         touched = false
+        canProtocol = false
+    }
+
+    /**
+     * Puts the adapter on 11-bit CAN before anything addressed goes out. In automatic mode (ATSP0) an adapter that
+     * has not found the protocol yet starts a search on each request, which outlasts the request's timeout
+     * ("SEARCHING...", then "STOPPED"), and an STN refuses ATCRA until a CAN protocol is set. Every module this
+     * transport talks to is on 11-bit CAN (the request takes only 11-bit ids), so 6 (500 kbit/s) is set unless
+     * the adapter already sits on 6 or 8. True when the adapter is on 11-bit CAN.
+     */
+    private fun ensureCanLocked(): Boolean {
+        if (canProtocol) return true
+        val dpn = link.send("ATDPN", AT_TIMEOUT_MS)?.uppercase()?.replace(">", "")?.trim()?.removePrefix("A")
+        if (dpn == "6" || dpn == "8") {
+            canProtocol = true
+            return true
+        }
+        val reply = link.send("ATSP6", AT_TIMEOUT_MS)
+        canProtocol = reply != null && reply.uppercase().contains("OK")
+        state = null
+        return canProtocol
     }
 
     private fun probeLocked(): AdapterCaps {
         caps?.let { return it }
+        // The receive filter is only accepted once a CAN protocol is set.
+        ensureCanLocked()
         fun ok(reply: String?) = reply != null && reply.uppercase().contains("OK")
         val sti = link.send("STI", AT_TIMEOUT_MS)
         val stn = sti != null && !sti.contains('?') && sti.isNotBlank()
@@ -171,6 +197,7 @@ class DiagTransport(
     }
 
     private fun requestLocked(tx: Int, rx: Int, payload: ByteArray, timeoutMs: Long): RawReply {
+        if (!ensureCanLocked()) return RawReply.Error("adapter would not take CAN protocol 6")
         val caps = probeLocked()
         val st = if (link.slowLink && !caps.stn) ST_SLOW else ST_FAST
         val want = LinkSettings(
@@ -224,5 +251,7 @@ class DiagTransport(
         const val ST_SLOW = 0x80
         /** AT commands that read or set only echo/linefeeds: they leave addresses alone. */
         val HARMLESS = listOf("ATDP", "ATRV", "ATI", "ATE", "ATL")
+        /** AT commands after which the protocol may be automatic again (or searching). */
+        val PROTOCOL_RESETS = listOf("ATSP", "ATTP", "ATZ", "ATWS", "ATPC")
     }
 }

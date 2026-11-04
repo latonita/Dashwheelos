@@ -63,6 +63,41 @@ class DiagTransportTest {
     }
 
     @Test
+    fun anAdapterStillSearchingIsPutOnCanBeforeTheProbe() = runBlocking {
+        // Seen on the car: in ATSP0 an OBDLink EX that had not found the protocol answered every request with
+        // "SEARCHING..." past the timeout, and refused ATCRA until a CAN protocol was set.
+        val link = FakeLink(stn = true)
+        link.answers["ATDPN"] = "A0"
+        val t = transport(link)
+        t.request(0x784, 0x785, "18 00 FF 00")
+        assertTrue(link.sent.indexOf("ATSP6") in 0 until link.sent.indexOf("ATCRA7E8"))
+        t.request(0x7E0, 0x7E8, "18 00 FF 00")
+        assertEquals(1, link.sent.count { it == "ATSP6" })
+    }
+
+    @Test
+    fun anAdapterAlreadyOnElevenBitCanIsLeftAlone() = runBlocking {
+        val link = FakeLink()
+        link.answers["ATDPN"] = "A6"
+        transport(link).request(0x784, 0x785, "18 00 FF 00")
+        assertFalse(link.sent.contains("ATSP6"))
+    }
+
+    @Test
+    fun aForeignProtocolChangeIsCheckedAgain() = runBlocking {
+        val link = FakeLink()
+        link.answers["ATDPN"] = "0"
+        val t = transport(link)
+        t.request(0x784, 0x785, "18 00 FF 00")
+        t.noteForeign("ATSP0")
+        t.request(0x784, 0x785, "18 00 FF 00")
+        assertEquals(2, link.sent.count { it == "ATSP6" })
+        t.noteForeign("ATDPN")
+        t.request(0x784, 0x785, "18 00 FF 00")
+        assertEquals(2, link.sent.count { it == "ATSP6" })
+    }
+
+    @Test
     fun probeFindsWhatTheAdapterAccepts() = runBlocking {
         val full = transport(FakeLink(stn = true)).caps()
         assertEquals(AdapterCaps(stn = true, canReceiveFilter = true, flowControlSet = true), full)
