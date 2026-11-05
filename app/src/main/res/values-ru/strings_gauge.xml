@@ -52,4 +52,7 @@
     <string name="gauge_domain_climate">Климат</string>
     <string name="gauge_domain_driver_aids">Помощь водителю</string>
     <string name="gauge_domain_identity">Данные авто</string>
+    <string name="gauge_red">Красная от</string>
+    <string name="gauge_red_none">нет</string>
+    <string name="gauge_red_below">Красная зона ниже этого значения (для низких)</string>
 </resources>
