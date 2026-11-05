@@ -121,7 +121,7 @@ object Tyres {
             val pos = tyrePosition(intent.getIntExtra("tires", -1)) ?: return
             val tyre = Tyre(
                 kPa = intent.getIntExtra("airpressure", 0),
-                celsius = intent.getIntExtra("temperature", 0),
+                celsius = if (intent.hasExtra("temperature")) intent.getIntExtra("temperature", 0) else null,
                 sensorBatteryLow = intent.getBooleanExtra("lowpower", false),
                 leak = intent.getBooleanExtra("leakage", false),
                 noSignal = intent.getBooleanExtra("nosignal", false),
