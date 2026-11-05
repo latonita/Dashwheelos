@@ -1,5 +1,6 @@
 package com.openauto.dash
 
+import com.openauto.dash.unit.xyauto.hexOf
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
