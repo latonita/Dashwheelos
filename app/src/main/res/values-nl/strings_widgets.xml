@@ -172,4 +172,6 @@
     <string name="widgets_switch_screen_off_detail">Zet het scherm uit zoals de knop van het toestel</string>
     <string name="map_tile_3d_buildings">3D-gebouwen</string>
     <string name="map_tile_3d_buildings_detail">Toont gebouwen als blokken. Belast de grafische chip meer.</string>
+    <string name="map_tile_ride_trail">Ritspoor</string>
+    <string name="map_tile_ride_trail_detail">Toont het pad van deze rit, gekleurd naar snelheid en vervagend achter de auto.</string>
 </resources>

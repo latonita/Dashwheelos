@@ -173,4 +173,6 @@
     <string name="widgets_switch_screen_off_detail">Kikapcsolja a képernyőt, mint a fejegység gombja</string>
     <string name="map_tile_3d_buildings">3D épületek</string>
     <string name="map_tile_3d_buildings_detail">Az épületek térbeli blokkként jelennek meg. Jobban terheli a grafikus chipet.</string>
+    <string name="map_tile_ride_trail">Útvonalnyom</string>
+    <string name="map_tile_ride_trail_detail">Megmutatja az aktuális út nyomát sebesség szerint színezve, az autó mögött halványodva.</string>
 </resources>

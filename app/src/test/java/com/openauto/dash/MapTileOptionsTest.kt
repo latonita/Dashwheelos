@@ -56,4 +56,11 @@ class MapTileOptionsTest {
         assertEquals("highway_name_other", MapBuildings3d.firstLabelId(style))
         assertNull(MapBuildings3d.firstLabelId(listOf(flat("bg"), flat("roads", "transportation"))))
     }
+
+    @Test
+    fun theRideTrailIsOnUnlessSwitchedOff() {
+        assertTrue(MapTileOptions.parseRideTrail(null))
+        assertTrue(MapTileOptions.parseRideTrail(true))
+        assertFalse(MapTileOptions.parseRideTrail(false))
+    }
 }

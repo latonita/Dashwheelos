@@ -172,4 +172,6 @@
     <string name="widgets_switch_screen_off_detail">Schaltet den Bildschirm aus wie die Taste des Geräts</string>
     <string name="map_tile_3d_buildings">3D-Gebäude</string>
     <string name="map_tile_3d_buildings_detail">Gebäude als Blöcke darstellen. Beansprucht den Grafikchip stärker.</string>
+    <string name="map_tile_ride_trail">Fahrspur</string>
+    <string name="map_tile_ride_trail_detail">Zeigt den Weg dieser Fahrt, nach Tempo eingefärbt, hinter dem Auto verblassend.</string>
 </resources>

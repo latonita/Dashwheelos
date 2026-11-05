@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Apartment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -356,4 +357,8 @@ private fun MapTileToggles() {
     SettingsToggle(
         Icons.Filled.Apartment, stringResource(R.string.map_tile_3d_buildings), stringResource(R.string.map_tile_3d_buildings_detail), on
     ) { MapTileOptions.setBuildings3d(context, it) }
+    val trail by MapTileOptions.rideTrail.collectAsState()
+    SettingsToggle(
+        Icons.Filled.Route, stringResource(R.string.map_tile_ride_trail), stringResource(R.string.map_tile_ride_trail_detail), trail
+    ) { MapTileOptions.setRideTrail(context, it) }
 }

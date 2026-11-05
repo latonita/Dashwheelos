@@ -130,6 +130,7 @@ internal object DriveLog {
         val app = context.applicationContext
         if (appContext == null) {
             appContext = app
+            RideTrail.restore(app)
             val p = prefs(app)
             _drives.value = p.getString("drives", null)?.let { DriveSummaries.decode(it) }.orEmpty()
             // The trip under way when the unit was last switched off: carried on
@@ -213,6 +214,7 @@ internal object DriveLog {
             log(done)
             reports.tryEmit(done)
         }
+        RideTrail.flush(force = true)
         _current.value = null
         savedAt = 0L
         prefs(app).edit().remove("trip").apply()
@@ -236,6 +238,7 @@ internal object DriveLog {
 
     private fun log(drive: DriveSummary) {
         val app = appContext ?: return
+        RideTrail.archive(drive.startedAt)
         _drives.value = DriveSummaries.merge(_drives.value, drive, DriveLogRules.MAX_ITEMS)
         prefs(app).edit().putString("drives", DriveSummaries.encode(_drives.value)).apply()
     }
