@@ -773,6 +773,7 @@ private fun WheelCallout(row: FaceRow?, look: FaceLook, m: FaceMetrics, end: Boo
             val unit = pressure.substringAfter(' ', "")
             if (unit.isNotEmpty()) FaceText(" $unit", look, m.sp(max(m.u * 5f, 10f)), color = look.dim, modifier = Modifier.padding(bottom = 2.dp))
         }
+        row?.sub?.let { FaceText(it, look, m.sp(max(m.u * 4.8f, 10f)), color = look.dim) }
         if (problem.isNotEmpty()) FaceText(problem, look, m.sp(max(m.u * 4.8f, 10f)), color = look.warn, weight = FontWeight.Medium)
     }
 }
