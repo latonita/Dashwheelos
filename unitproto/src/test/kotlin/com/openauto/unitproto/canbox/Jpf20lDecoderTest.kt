@@ -302,11 +302,11 @@ class Jpf20lDecoderTest {
     fun aTyreReading_decodesPositionPressureTemperatureAndFlags() {
         // Rear right (the WCM's order), 0x00E6 = 230 kPa, 0x50 = 80 - 40 = 40 degC, no flags.
         assertEquals(
-            TyreReading(TyreReading.REAR_RIGHT, 230, 40, sensorBatteryLow = false, leak = false, noSignal = false),
+            TyreReading(TyreReading.REAR_RIGHT, 230, 27, sensorBatteryLow = false, leak = false, noSignal = false),
             Jpf20lSignals.tyre(bytes(0x02, 0x00, 0xE6, 0x50, 0x00))
         )
         assertEquals(
-            TyreReading(TyreReading.SPARE, 0, -40, sensorBatteryLow = true, leak = true, noSignal = true),
+            TyreReading(TyreReading.SPARE, 0, -18, sensorBatteryLow = true, leak = true, noSignal = true),
             Jpf20lSignals.tyre(bytes(0x04, 0x00, 0x00, 0x00, 0x07))
         )
     }
@@ -336,9 +336,11 @@ class Jpf20lDecoderTest {
     }
 
     @Test
-    fun theTyreTemperature_isBiasedBy40_andFFIsNull() {
-        assertEquals(40, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0x50, 0x00))!!.celsius)
-        assertEquals(-40, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0x00, 0x00))!!.celsius)
+    fun theTyreTemperature_isRawFahrenheit_andFFIsNull() {
+        assertEquals(24, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 76, 0x00))!!.celsius)
+        assertEquals(0, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 32, 0x00))!!.celsius)
+        assertEquals(-18, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0x00, 0x00))!!.celsius)
+        assertEquals(123, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFE, 0x00))!!.celsius)
         assertNull(Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFF, 0x00))!!.celsius)
         assertEquals(230, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFF, 0x00))!!.kPa)
     }
@@ -376,10 +378,9 @@ class Jpf20lDecoderTest {
         // 700 kPa is the top; 701 is not, and neither is the FFFF sentinel - the temperature stays.
         assertEquals(700, Jpf20lSignals.tyre(bytes(0x00, 0x02, 0xBC, 0x50, 0x00))?.kPa)
         assertNull(Jpf20lSignals.tyre(bytes(0x00, 0x02, 0xBD, 0x50, 0x00))!!.kPa)
-        assertEquals(40, Jpf20lSignals.tyre(bytes(0x00, 0xFF, 0xFF, 0x50, 0x00))!!.celsius)
-        // 120 degC is the top (160 on the wire); 161 is not, nor FF. The pressure stays.
-        assertEquals(120, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xA0, 0x00))?.celsius)
-        assertNull(Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xA1, 0x00))!!.celsius)
+        assertEquals(27, Jpf20lSignals.tyre(bytes(0x00, 0xFF, 0xFF, 0x50, 0x00))!!.celsius)
+        // FE is the top raw byte (123 degC, inside the sanity range); FF is none. The pressure stays.
+        assertEquals(123, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFE, 0x00))?.celsius)
         assertEquals(230, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFF, 0x00))!!.kPa)
         // Short payloads, one byte at a time.
         val good = bytes(0x02, 0x00, 0xE6, 0x50, 0x00)
