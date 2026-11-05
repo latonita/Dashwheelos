@@ -102,9 +102,20 @@ private class XyautoBus(private val app: Context) : VehicleBusSource {
      */
     override val silenceMs: Long = 5_000L
 
-    private var publisher: XyautoBusPublisher? = null
-    private var raw: ((String, String) -> Unit)? = null
+    @Volatile private var publisher: XyautoBusPublisher? = null
+    @Volatile private var raw: ((String, String) -> Unit)? = null
     private var registered = false
+
+    /** The Signal Finder or the CAN monitor is open: every frame's bytes are wanted as text. */
+    @Volatile private var sniffing = false
+    /** The learned signals' keys: those frames' bytes are wanted as text for good. */
+    @Volatile private var watched: Set<String> = emptySet()
+
+    override fun sniff(on: Boolean) { sniffing = on }
+    override fun watch(keys: Set<String>) { watched = keys }
+
+    // The frames arrive about six a second: decoded and published on a thread of their own, off the UI's.
+    private val worker by lazy { android.os.HandlerThread("xyauto-bus").apply { start() } }
 
     // Reads the stream as a stock JPF2 box until the box names its firmware
     // (0xF0), then as whatever the registry says that is.
@@ -115,7 +126,7 @@ private class XyautoBus(private val app: Context) : VehicleBusSource {
         this.raw = raw
         if (!registered) {
             val filter = IntentFilter().apply { XyautoProtocol.BROADCASTS.forEach(::addAction) }
-            ContextCompat.registerReceiver(app, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+            app.registerReceiver(receiver, filter, null, android.os.Handler(worker.looper), Context.RECEIVER_EXPORTED)
             registered = true
         }
         // The mirror is off until asked: without this, rxpduses carries only the
@@ -151,12 +162,28 @@ private class XyautoBus(private val app: Context) : VehicleBusSource {
         _listening.value = true
         UnitPlatform.markUsed(Cap.VEHICLE_BUS)
         // Every frame is offered to the Signal Finder as it came, so a value
-        // nothing decodes yet can still be learned by demonstration.
-        raw?.invoke("can:${decoded.name}", decoded.frame.payload.joinToString("") { "%02X".format(it) })
+        // nothing decodes yet can still be learned by demonstration. The text is
+        // only made while the finder is open or a learned signal reads this
+        // frame; an empty value just says the box spoke.
+        val key = "can:${decoded.name}"
+        raw?.invoke(key, if (sniffing || key in watched) hexOf(decoded.frame.payload) else "")
         p.apply(decoded.values)
     }
 
     private companion object {
         const val TAG = "XyautoBus"
     }
+}
+
+private val HEX = "0123456789ABCDEF".toCharArray()
+
+/** Upper-case hex of [bytes], two digits each, without the formatter. */
+internal fun hexOf(bytes: ByteArray): String {
+    val out = CharArray(bytes.size * 2)
+    for (i in bytes.indices) {
+        val v = bytes[i].toInt() and 0xFF
+        out[i * 2] = HEX[v ushr 4]
+        out[i * 2 + 1] = HEX[v and 0x0F]
+    }
+    return String(out)
 }

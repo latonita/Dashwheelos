@@ -41,3 +41,7 @@
 
 # The tile displays' helper runs by name in a process of its own (app_process, SystemDisplays).
 -keep class com.openauto.dash.SystemDisplayHelper { public static void main(java.lang.String[]); }
+
+# QuietComposeAccessibility reads these two private fields by name.
+-keepclassmembers class androidx.compose.ui.platform.AndroidComposeView { private ** composeAccessibilityDelegate; }
+-keepclassmembers class androidx.compose.ui.platform.AndroidComposeViewAccessibilityDelegateCompat { private ** enabledServices; }

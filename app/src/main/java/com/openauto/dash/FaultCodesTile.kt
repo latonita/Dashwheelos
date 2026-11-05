@@ -6,6 +6,7 @@ import com.openauto.dash.diag.DtcStatus
 import com.openauto.dash.diag.ModuleScan
 import com.openauto.dash.diag.MutedCodes
 import com.openauto.dash.diag.ScanOutcome
+import com.openauto.dash.vehicle.rememberEngineOff
 import com.openauto.dash.vehicle.rememberGaugeInt
 import com.openauto.dash.vehicle.K
 import android.Manifest
@@ -164,8 +165,7 @@ internal fun ObdDtcCard(
     val problemNames = messageTexts.filterIndexed { i, _ -> carMessages[i].level != PsaWarnings.Level.INFO } +
         warning.orEmpty().map { c -> diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle() }
     // Only whether the engine runs matters here: the card must not redraw on every OBD sample.
-    val rpm = rememberGaugeInt(K.RPM)
-    val engineOff = rpm == null || rpm == 0
+    val engineOff = rememberEngineOff()
     val pending by ObdBluetoothManager.pending.collectAsState()
     // The AI's advice is written in the mechanic's language; its labels follow it.
     // The setting is re-read as the AI's state moves on (a cheap prefs lookup);

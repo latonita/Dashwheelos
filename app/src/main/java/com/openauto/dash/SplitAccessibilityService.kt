@@ -540,9 +540,35 @@ class SplitAccessibilityService : AccessibilityService() {
             val app = context.applicationContext
             scope.launch {
                 val access = PrivilegedShell.access.first { it != PrivilegedShell.Access.UNKNOWN }
-                if (access.shell && !isConnected) turnOn(app)
+                if (!access.shell || isConnected) return@launch
+                // Only once a feature that goes through the service is in use; never turned off here.
+                neededFlow().first { it }
+                if (!isConnected) turnOn(app)
             }
         }
+
+        /**
+         * Whether a feature that needs the service is switched on (see [serviceNeeded]). The
+         * on-demand ones (the phone's typing, split screen taps) start it themselves or fall back.
+         */
+        private fun neededFlow(): kotlinx.coroutines.flow.Flow<Boolean> = combine(
+            SteeringWheelStore.mapping, SteeringWheelStore.buttons, SecondScreenStore.config,
+            SecondScreenController.status, EmbeddedApp.keysAwayFlow, RomPopups.replaced, ReverseView.on,
+            NavDirections.running
+        ) { values ->
+            @Suppress("UNCHECKED_CAST")
+            val config = values[2] as SecondScreenConfig
+            val status = values[3] as SecondScreenStatus
+            serviceNeeded(
+                wheelBound = values[0] as Boolean || (values[1] as List<*>).any { (it as? WheelButton)?.assignment != null },
+                clusterKeys = (config.pageKeys.isNotEmpty() || config.mediaKeysTurnPages) &&
+                    (status.output == SecondScreenOutput.VIDEO_CLUSTER || status.output == SecondScreenOutput.DATA),
+                keysAway = values[4] as Boolean,
+                radarReplaced = RomPopups.Kind.RADAR in (values[5] as Set<*>),
+                reverseView = values[6] as Boolean,
+                wazeRuns = Edition.full && values[7] == WazeScreen.PACKAGE
+            )
+        }.distinctUntilChanged()
 
         /**
          * Adds the service to the enabled ones through the privileged shell, the
@@ -681,3 +707,15 @@ class SplitAccessibilityService : AccessibilityService() {
 /** See [SplitAccessibilityService.filterKeys]; pure, for the tests. */
 internal fun keysWanted(learning: Boolean, wheelBound: Boolean, unitKeys: Boolean, clusterKeys: Boolean, keysAway: Boolean): Boolean =
     learning || clusterKeys || keysAway || (wheelBound && !unitKeys)
+
+/**
+ * Whether Dashwheel should switch its accessibility service on by itself: a learned or
+ * assigned steering wheel button, the second screen's page keys, an app inside a tile
+ * holding the unit's keys, the car app's radar replaced, the reversing camera view, or
+ * Waze guiding. The service makes Android (and Compose) do accessibility work on every
+ * screen change, so it stays off while none of them is in use; pure, for the tests.
+ */
+internal fun serviceNeeded(
+    wheelBound: Boolean, clusterKeys: Boolean, keysAway: Boolean,
+    radarReplaced: Boolean, reverseView: Boolean, wazeRuns: Boolean
+): Boolean = wheelBound || clusterKeys || keysAway || radarReplaced || reverseView || wazeRuns
