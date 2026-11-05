@@ -6,8 +6,13 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
-/** One kept fix of the ride: position in 1e-5 degrees (about 1.1 m), speed in km/h, time in seconds. */
-internal data class RidePoint(val latE5: Int, val lonE5: Int, val kmh: Int, val sec: Long)
+/**
+ * One kept fix of the ride: position in 1e-5 degrees (about 1.1 m), speed in km/h, time in seconds, and the
+ * altitude in whole metres ([altM], null when the fix had none). Recorded only; nothing reads it yet.
+ * On the API 27 unit, `Location.getAltitude()` is the WGS84 ellipsoid height (no geoid correction), so it
+ * runs tens of metres off sea level.
+ */
+internal data class RidePoint(val latE5: Int, val lonE5: Int, val kmh: Int, val sec: Long, val altM: Int? = null)
 
 /**
  * The path of the current ride ([RideTrail] records it, the map tile draws it): the fixes the trip computer
@@ -68,15 +73,21 @@ internal class RideTrack(points: List<RidePoint> = emptyList(), driveId: Long = 
         return RideTrack(out, driveId)
     }
 
-    /** "v1;driveId;firstSec;lat,lon,kmh,dsec,..." with the first point absolute and the rest as differences. */
+    /**
+     * "v2;driveId;firstSec;lat,lon,kmh,dsec,dalt,..." with the first point absolute and the rest as differences.
+     * dalt is the altitude change in metres against the last point that had one (0 before the first), or empty
+     * for a point without altitude; an empty field does not move that reference, so the chain survives gaps.
+     */
     fun encode(): String {
         val sb = StringBuilder(list.size * 16 + 32)
-        sb.append("v1;").append(driveId).append(';').append(list.firstOrNull()?.sec ?: 0L).append(';')
+        sb.append("v2;").append(driveId).append(';').append(list.firstOrNull()?.sec ?: 0L).append(';')
         var prev: RidePoint? = null
+        var lastAlt = 0
         for (p in list) {
             if (prev != null) sb.append(',')
             sb.append(p.latE5 - (prev?.latE5 ?: 0)).append(',').append(p.lonE5 - (prev?.lonE5 ?: 0)).append(',')
-                .append(p.kmh).append(',').append(p.sec - (prev?.sec ?: p.sec))
+                .append(p.kmh).append(',').append(p.sec - (prev?.sec ?: p.sec)).append(',')
+            p.altM?.let { sb.append(it - lastAlt); lastAlt = it }
             prev = p
         }
         return sb.toString()
@@ -116,27 +127,38 @@ internal class RideTrack(points: List<RidePoint> = emptyList(), driveId: Long = 
             return if (diff > 180.0) 360.0 - diff else diff
         }
 
-        /** The track [encode] wrote, or an empty one when [s] is missing or damaged. */
+        /** The track [encode] wrote (v2), or an older v1 file (no altitude); empty when [s] is missing or damaged. */
         fun decode(s: String?): RideTrack {
             val parts = s?.split(';') ?: return RideTrack()
-            if (parts.size != 4 || parts[0] != "v1") return RideTrack()
+            if (parts.size != 4) return RideTrack()
+            val width = when (parts[0]) { "v1" -> 4; "v2" -> 5; else -> return RideTrack() }
             val id = parts[1].toLongOrNull() ?: return RideTrack()
             var sec = parts[2].toLongOrNull() ?: return RideTrack()
             if (parts[3].isEmpty()) return RideTrack(emptyList(), id)
-            val n = parts[3].split(',').map { it.toIntOrNull() ?: return RideTrack() }
-            if (n.size % 4 != 0) return RideTrack()
-            val out = ArrayList<RidePoint>(n.size / 4)
+            val f = parts[3].split(',')
+            if (f.size % width != 0) return RideTrack()
+            val out = ArrayList<RidePoint>(f.size / width)
             var lat = 0
             var lon = 0
-            for (i in n.indices step 4) {
-                lat += n[i]; lon += n[i + 1]; sec += n[i + 3]
-                out.add(RidePoint(lat, lon, n[i + 2], sec))
+            var alt = 0
+            for (i in f.indices step width) {
+                lat += f[i].toIntOrNull() ?: return RideTrack()
+                lon += f[i + 1].toIntOrNull() ?: return RideTrack()
+                val kmh = f[i + 2].toIntOrNull() ?: return RideTrack()
+                sec += f[i + 3].toLongOrNull() ?: return RideTrack()
+                var altM: Int? = null
+                if (width == 5 && f[i + 4].isNotEmpty()) {
+                    alt += f[i + 4].toIntOrNull() ?: return RideTrack()
+                    altM = alt
+                }
+                out.add(RidePoint(lat, lon, kmh, sec, altM))
             }
             return RideTrack(out, id)
         }
 
-        fun pointOf(lat: Double, lon: Double, kmh: Float, timeMs: Long) =
-            RidePoint((lat * 1e5).roundToInt(), (lon * 1e5).roundToInt(), kmh.roundToInt().coerceIn(0, 400), timeMs / 1000)
+        fun pointOf(lat: Double, lon: Double, kmh: Float, timeMs: Long, altM: Double? = null) =
+            RidePoint((lat * 1e5).roundToInt(), (lon * 1e5).roundToInt(), kmh.roundToInt().coerceIn(0, 400), timeMs / 1000,
+                altM?.takeIf { it.isFinite() }?.roundToInt())
 
         /** Drive starts whose archive files go: all but the newest [max] (the file name is the start time). */
         fun archiveVictims(starts: List<Long>, max: Int): List<Long> = starts.sortedDescending().drop(max)

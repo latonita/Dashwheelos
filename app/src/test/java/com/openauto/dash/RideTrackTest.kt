@@ -103,13 +103,55 @@ class RideTrackTest {
     }
 
     @Test
+    fun v2RoundTripsAltitudeWithGapsAndNegatives() {
+        val alts = listOf(120, null, null, 118, -5, null, -5, 0, 300, null)
+        val t = RideTrack()
+        alts.forEachIndexed { i, a -> t.add(3, RidePoint(5_000_000 + i * 20, 1_000_000, 50, 100L + i, a)) }
+        val text = t.encode()
+        assertTrue(text, text.startsWith("v2;3;100;"))
+        assertEquals(alts, RideTrack.decode(text).points.map { it.altM })
+        assertEquals(t.points, RideTrack.decode(text).points)
+        // the gap does not move the reference: 120, (empty), (empty), then 118 is -2
+        assertTrue(text, text.contains(",-2,"))
+    }
+
+    @Test
+    fun v1FilesStillReadWithoutAltitude() {
+        val back = RideTrack.decode("v1;5;1000;5000000,1000000,50,0,18,3,52,2")
+        assertEquals(2, back.size)
+        assertEquals(listOf<Int?>(null, null), back.points.map { it.altM })
+        assertEquals(5_000_018, back.points[1].latE5)
+        assertEquals(1002L, back.points[1].sec)
+        assertEquals(0, RideTrack.decode("v2;1;0;1,2,3,4").size)
+    }
+
+    @Test
+    fun pointOfRoundsAltitude() {
+        assertEquals(124, RideTrack.pointOf(50.0, 20.0, 50f, 0L, 123.6).altM)
+        assertEquals(-3, RideTrack.pointOf(50.0, 20.0, 50f, 0L, -2.6).altM)
+        assertEquals(null, RideTrack.pointOf(50.0, 20.0, 50f, 0L).altM)
+        assertEquals(null, RideTrack.pointOf(50.0, 20.0, 50f, 0L, Double.NaN).altM)
+    }
+
+    @Test
+    fun reducedCarriesAltitude() {
+        val t = RideTrack()
+        for (i in 0 until 5_000) t.add(1, RidePoint(5_000_000 + i * 20, 1_000_000, 50, i.toLong(), if (i % 10 == 3) null else i / 10))
+        val r = RideTrack.decode(t.reduced(2_000).encode())
+        assertEquals(2_000, r.size)
+        assertEquals(4_999 / 10, r.points.last().altM)
+        assertTrue(r.points.any { it.altM != null } && r.points.any { it.altM == null })
+        assertEquals(t.points.first().altM, r.points.first().altM)
+    }
+
+    @Test
     fun a300KmRideStaysSmall() {
         val t = RideTrack()
         var sec = 0L
         // 300 km at 20 m steps, speed wandering between 30 and 120 km/h.
         for (i in 0 until 15_000) {
             sec += 1 + (i % 3)
-            t.add(1, RidePoint(5_000_000 + i * 18, 1_000_000 + (i % 13) * 4 + i * 11, 30 + (i / 7) % 90, sec))
+            t.add(1, RidePoint(5_000_000 + i * 18, 1_000_000 + (i % 13) * 4 + i * 11, 30 + (i / 7) % 90, sec, 200 + ((i / 5) % 40) - (i % 3)))
         }
         val text = t.encode()
         println("300 km ride: ${t.size} points, ${text.length} bytes; archive ${t.reduced(RideTrack.ARCHIVE_POINTS).encode().length} bytes")

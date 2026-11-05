@@ -47,7 +47,8 @@ internal object RideTrail {
 
     /** A GPS step [l] that counted towards trip [driveId] at [speedKmh]. Main thread. */
     fun onFix(driveId: Long, l: Location, speedKmh: Float) {
-        val p = RideTrack.pointOf(l.latitude, l.longitude, speedKmh, System.currentTimeMillis())
+        val p = RideTrack.pointOf(l.latitude, l.longitude, speedKmh, System.currentTimeMillis(),
+            if (l.hasAltitude()) l.altitude else null)
         // A new drive wipes the track: the finished one goes to the archive first (a user's trip reset
         // can reach here before [DriveLog] has logged the drive).
         if (track.driveId != driveId) archiveHeld()
