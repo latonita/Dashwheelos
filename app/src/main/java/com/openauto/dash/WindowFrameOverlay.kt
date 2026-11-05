@@ -95,7 +95,7 @@ private class FrameWindow(private val context: Context) {
         val v = ComposeView(context).apply {
             setViewTreeLifecycleOwner(activity)
             setViewTreeSavedStateRegistryOwner(activity)
-            setContent { SkinWindowFrame(Modifier.fillMaxSize()) }
+            setContent { QuietComposeAccessibility(); SkinWindowFrame(Modifier.fillMaxSize()) }
         }
         runCatching { wm.addView(v, lp) }
             .onSuccess { view = v; Log.i(TAG, "frame over [${r.left},${r.top} ${r.right},${r.bottom}]") }

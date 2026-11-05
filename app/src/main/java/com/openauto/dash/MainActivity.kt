@@ -473,6 +473,7 @@ fun OpenAutoDashTheme(content: @Composable () -> Unit) {
     // The skin's corners for every stock dialog and menu (SkinChrome).
     // The driver's units reach every tile and pop-up from here (Units).
     ProvideUnits {
+        QuietComposeAccessibility()
         MaterialTheme(colorScheme = colorScheme, typography = DashTypography, shapes = skinChrome().shapes, content = content)
     }
 }
