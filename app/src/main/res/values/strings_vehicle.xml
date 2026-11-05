@@ -238,4 +238,45 @@
     <string name="vehicle_clear_confirm_body">They are erased from the car for good. A garage needs them to find a fault.</string>
     <string name="vehicle_err_unit_bt_aa">A phone\'s wireless Android Auto keeps the unit\'s Bluetooth busy, so %1$s can\'t connect: turn wireless Android Auto off on the phone</string>
     <string name="vehicle_err_unit_bt_restarted">The unit\'s Bluetooth was stuck and has been restarted: %1$s connects again in a minute</string>
+    <!-- Fault codes module by module (docs/jeep-diag-spec.md) -->
+    <string name="vehicle_dtc_fallback_fix_any">No stored description. Scan for related codes, check the affected circuit\'s sensor/wiring, and search \"%1$s\" with your car\'s model for specific advice.</string>
+    <string name="vehicle_obd_scope_any">Standard OBD only sees engine and emissions faults; ABS, airbag and body warnings need the maker\'s diagnostic tool.</string>
+    <string name="diag_reading_module">Reading %1$s…</string>
+    <string name="diag_by_module">By module</string>
+    <string name="diag_sheet_title">Fault codes by module</string>
+    <plurals name="diag_active_count">
+        <item quantity="one">%d active</item>
+        <item quantity="other">%d active</item>
+    </plurals>
+    <plurals name="diag_faults_in_modules">
+        <item quantity="one">%1$d fault in %2$d modules</item>
+        <item quantity="other">%1$d faults in %2$d modules</item>
+    </plurals>
+    <plurals name="diag_module_faults">
+        <item quantity="one">%d fault</item>
+        <item quantity="other">%d faults</item>
+    </plurals>
+    <string name="diag_module_partial">%1$d faults (the adapter shows only the first %2$d)</string>
+    <string name="diag_module_clean">No faults</string>
+    <string name="diag_clean_modules">No faults in: %1$s</string>
+    <plurals name="diag_not_answered">
+        <item quantity="one">%d module did not answer</item>
+        <item quantity="other">%d modules did not answer</item>
+    </plurals>
+    <string name="diag_outcome_no_response">No answer (probably not fitted)</string>
+    <string name="diag_outcome_refused">Refused the request</string>
+    <string name="diag_outcome_error">Adapter error</string>
+    <string name="diag_muted">muted</string>
+    <string name="diag_muted_count">%d muted</string>
+    <string name="diag_mute">Mute</string>
+    <string name="diag_unmute">Unmute</string>
+    <string name="diag_status_active">Active</string>
+    <string name="diag_status_pending">Pending</string>
+    <string name="diag_status_stored">Stored</string>
+    <string name="diag_clear_module_title">Erase the fault codes of %1$s?</string>
+    <string name="diag_clear_sensitive_title">%1$s holds learned settings</string>
+    <string name="diag_clear_sensitive_body">Clearing this module may reset its adaptations, and the airbag or immobilizer warning lamp may stay on until the module checks itself again. Erase anyway?</string>
+    <string name="diag_clear_refused">%1$s refused the clear (%2$s). Turn the ignition on with the engine off and try again.</string>
+    <string name="diag_clear_no_answer">%1$s did not answer the clear. Turn the ignition on with the engine off and try again.</string>
+    <string name="diag_cleared_module">%1$s: fault codes erased.</string>
 </resources>

@@ -79,31 +79,6 @@ class AiMechanicTest {
     }
 
     @Test
-    fun aScanMadeWithTheEngineOffIsRepeatedOnceItHasRun() {
-        val r = RescanAfterStart()
-        r.scanned(rpm = 0)
-        assertFalse(r.due(rpm = 0, now = 0))
-        assertFalse(r.due(rpm = 850, now = 1_000))
-        assertFalse(r.due(rpm = 850, now = 1_000 + RescanAfterStart.RUNNING_MS - 1))
-        assertTrue(r.due(rpm = 850, now = 1_000 + RescanAfterStart.RUNNING_MS))
-        // Once only.
-        assertFalse(r.due(rpm = 850, now = 1_000 + 2 * RescanAfterStart.RUNNING_MS))
-    }
-
-    @Test
-    fun stallingRestartsTheWaitAndARunningScanNeedsNoRepeat() {
-        val r = RescanAfterStart()
-        r.scanned(rpm = 0)
-        assertFalse(r.due(rpm = 850, now = 0))
-        assertFalse(r.due(rpm = 0, now = 15_000)) // stalled
-        assertFalse(r.due(rpm = 850, now = 16_000))
-        assertFalse(r.due(rpm = 850, now = 16_000 + RescanAfterStart.RUNNING_MS - 1))
-        assertTrue(r.due(rpm = 850, now = 16_000 + RescanAfterStart.RUNNING_MS))
-        r.scanned(rpm = 900)
-        assertFalse(r.due(rpm = 900, now = 100_000 + RescanAfterStart.RUNNING_MS))
-    }
-
-    @Test
     fun overheatingIsSaidOnceUntilTheEngineCoolsDown() {
         val w = LiveWatch()
         var t = 0L

@@ -235,7 +235,7 @@ object StartupBriefing {
         }
         // Then the engine, as a sentence of its own when its scan lands.
         val engine = engine(startedAt) ?: return
-        val codes = engine.codes ?: return
+        val codes = engine.warningCodes ?: return
         val about = BriefingFacts(
             hour = facts.hour,
             faults = codes,
@@ -263,8 +263,8 @@ object StartupBriefing {
                 hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
                 weather = WeatherRepo.weather.value?.takeIf { now - it.fetchedAt < 3 * 3_600_000L },
                 fuel = fuelInfoNow(),
-                faults = engine.codes,
-                faultTitles = engine.codes?.let { spokenFaultTitles(resources, it) }.orEmpty(),
+                faults = engine.warningCodes,
+                faultTitles = engine.warningCodes?.let { spokenFaultTitles(resources, it) }.orEmpty(),
                 faultSummary = engine.diagnosis?.summary,
                 event = withContext(Dispatchers.IO) { nextEvent(app, locale) },
                 upkeep = Maintenance.state.value.statuses(now).filter { it.stage == UpkeepStage.SOON || it.stage == UpkeepStage.DUE },
@@ -334,7 +334,7 @@ object StartupBriefing {
         }
         return withTimeoutOrNull(SETTLE_MS) {
             AiMechanic.state.first { s ->
-                s.codes?.isEmpty() == true || (!s.thinking && (s.diagnosis != null || s.note != null))
+                s.warningCodes?.isEmpty() == true || (!s.thinking && (s.diagnosis != null || s.note != null))
             }
         } ?: AiMechanic.state.value.takeIf { it.codes != null }
     }

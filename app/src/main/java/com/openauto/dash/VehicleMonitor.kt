@@ -93,6 +93,7 @@ internal object VehicleMonitor {
         DeepObdSource.init(context)
         val listener = context.applicationContext
         scope.launch { DeepObdSource.run(listener) }
+        DiagService.start(context)
         scope.launch { pollWhileConnected() }
         scope.launch { reconnectWhileWanted() }
         scope.launch { redialAfterCalls() }
@@ -280,17 +281,14 @@ internal object VehicleMonitor {
                 val floor = Vehicle.bus.holdAll(POLL_FLOOR)
                 try {
                     coroutineScope {
-                        // The AI mechanic checks for fault codes by itself once the first
-                        // readings are in (it only speaks about codes it hasn't heard before).
-                        launch {
-                            delay(3000)
-                            if (!DeepObdSource.owns()) AiMechanic.autoScan()
-                        }
+                        // The fault-code scans (on connect, after ACC on, after the engine starts) are
+                        // DiagService's: it watches the link itself and is told the revs here.
                         // Ten times a second: the rules and the saves run off the main thread.
                         withContext(Dispatchers.Default) {
                             while (true) {
                                 ObdBluetoothManager.poll()
                                 val readings = gaugesNow(POLL_FLOOR).toObdData()
+                                DiagService.onRpm(readings.rpm)
                                 AiMechanic.watch(readings)
                                 CarCare.watch(readings)
                                 delay(POLL_MS)

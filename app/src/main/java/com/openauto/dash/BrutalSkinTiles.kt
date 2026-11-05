@@ -535,7 +535,7 @@ private fun rememberBrVerdict(): Boolean? {
     val ai by AiMechanic.state.collectAsState()
     val messages = rememberCarMessages()
     val lamp by ObdBluetoothManager.lamp.collectAsState()
-    return when (carVerdict(messages.map { it.level }, ai.codes, ai.diagnosis?.severity, lamp?.on == true)) {
+    return when (carVerdict(messages.map { it.level }, ai.warningCodes, ai.diagnosis?.severity, lamp?.on == true)) {
         CarVerdict.STOP, CarVerdict.DRIVE -> true
         CarVerdict.FINE -> false
         CarVerdict.UNREAD -> null

@@ -1,5 +1,11 @@
 package com.openauto.dash
 
+import com.openauto.dash.diag.ClearRisk
+import com.openauto.dash.diag.DiagModule
+import com.openauto.dash.diag.DtcStatus
+import com.openauto.dash.diag.ModuleScan
+import com.openauto.dash.diag.MutedCodes
+import com.openauto.dash.diag.ScanOutcome
 import com.openauto.dash.vehicle.rememberGaugeInt
 import com.openauto.dash.vehicle.K
 import android.Manifest
@@ -10,7 +16,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -38,10 +46,13 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Euro
 import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TaskAlt
@@ -73,7 +84,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -109,12 +122,25 @@ internal fun ObdDtcCard(
     val connected = connection == ObdConnectionState.CONNECTED
     val ai by AiMechanic.state.collectAsState()
     val codes = ai.codes
+    // Muted codes stay in the list (dimmed) but warn nowhere: verdict, circles on the car, the count.
+    val warning = ai.warningCodes
+    val toggleMute = rememberMuteToggle()
     val diagnosis = ai.diagnosis
+    // A profile that reads several modules (Jeep WK): codes carry their module, Clear is per module, in a sheet.
+    val scans = ai.scans
+    val byModule = (scans?.size ?: 0) > 1
+    val car by CarProfileStore.profile.collectAsState()
+    // The PSA parts (the car's messages off its CAN box, the Citroën hints) are only for a PSA car.
+    val psa = PsaTripComputer.isPsa(car.make)
     // The car's own messages, the most serious first; asked for while the tile is on screen.
     // The engine's own warning ("engine fault, have it repaired", the pollution ones) says no more than its
     // fault codes once they are read: then only the codes show.
     val carMessages = rememberCarMessages().let { all ->
-        if (codes.isNullOrEmpty()) all else all.filter { it.code !in PsaWarnings.engineLamp }
+        when {
+            !psa -> emptyList()
+            warning.isNullOrEmpty() -> all
+            else -> all.filter { it.code !in PsaWarnings.engineLamp }
+        }
     }
     // Each problem numbered, the car's messages first, then the engine's codes: the
     // same number on the car's picture and in the list.
@@ -122,20 +148,21 @@ internal fun ObdDtcCard(
     val codeSerious = if (diagnosis?.severity == Severity.STOP) 2 else 1
     // A code's words on the car: what it means (the mechanic's, else the built-in table's) and the code.
     val codeNames = codes.orEmpty().map { c ->
-        (diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ObdCodes.describe(c).localizedTitle()) + " · " + c
+        (diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle()) + " · " + c
     }
-    val mapProblems = remember(carMessages, messageTexts, codes, diagnosis, codeNames) {
+    val mapProblems = remember(carMessages, messageTexts, codes, warning, diagnosis, codeNames) {
         carMessages.mapIndexedNotNull { i, m ->
             CarProblemMap.spotOf(m.code)?.let { spot -> MapProblem(spot, m.serious, messageTexts[i], number = i + 1) }
         } + codes.orEmpty().mapIndexedNotNull { i, code ->
-            CarProblemMap.spotOfCode(code)?.let { spot -> MapProblem(spot, codeSerious, codeNames[i], number = carMessages.size + i + 1) }
+            if (code in ai.muted) null
+            else CarProblemMap.spotOfCode(code)?.let { spot -> MapProblem(spot, codeSerious, codeNames[i], number = carMessages.size + i + 1) }
         }
     }
     val lamp by ObdBluetoothManager.lamp.collectAsState()
-    val verdict = carVerdict(carMessages.map { it.level }, codes, diagnosis?.severity, lamp?.on == true)
-    val problemCount = carMessages.count { it.level != PsaWarnings.Level.INFO } + codes.orEmpty().size
+    val verdict = carVerdict(carMessages.map { it.level }, warning, diagnosis?.severity, lamp?.on == true)
+    val problemCount = carMessages.count { it.level != PsaWarnings.Level.INFO } + warning.orEmpty().size
     val problemNames = messageTexts.filterIndexed { i, _ -> carMessages[i].level != PsaWarnings.Level.INFO } +
-        codes.orEmpty().map { c -> diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ObdCodes.describe(c).localizedTitle() }
+        warning.orEmpty().map { c -> diagnosis?.codes?.firstOrNull { it.code == c }?.meaning?.ifBlank { null } ?: ai.description(c) ?: ObdCodes.describe(c).localizedTitle() }
     // Only whether the engine runs matters here: the card must not redraw on every OBD sample.
     val rpm = rememberGaugeInt(K.RPM)
     val engineOff = rpm == null || rpm == 0
@@ -148,8 +175,16 @@ internal fun ObdDtcCard(
     // Asked from the microphone by the title: about the car as it is now, no fault needed.
     val ask by AskMechanic.state.collectAsState()
     val askAboutCar = rememberAskQuestion { AskMechanic.listenAboutCar(context) }
-    var busy by remember { mutableStateOf(false) }
+    var tapped by remember { mutableStateOf(false) }
+    // A scan or a clear, whoever started it (the background check too).
+    val sweeping by DiagService.busy.collectAsState()
+    val busy = tapped || sweeping
+    val progress by DiagService.progress.collectAsState()
+    val progressText = progress?.takeIf { byModule || it.protocol != com.openauto.dash.diag.DiagProtocol.OBD2 }
+        ?.let { stringResource(R.string.diag_reading_module, it.id) }
     var message by remember { mutableStateOf<DtcMessage?>(null) }
+    // The sheet with the codes module by module.
+    var showModules by remember { mutableStateOf(false) }
     // The code whose detail sheet is open.
     var opened by remember { mutableStateOf<String?>(null) }
     // The drive lock (DriveLock.kt) holds back the sheet's reading while the car moves; the voice stays.
@@ -158,23 +193,29 @@ internal fun ObdDtcCard(
     val scanFailed = stringResource(R.string.ai_scan_failed)
     val clearFailed = stringResource(R.string.ai_clear_failed)
     val clearedText = stringResource(R.string.ai_cleared)
-    val clearCodes = rememberClearCodes {
-        busy = true; message = null
+    val clearModule: (DiagModule) -> Unit = { module ->
+        tapped = true; message = null
         scope.launch {
-            val res = ObdBluetoothManager.clearTroubleCodes()
-            busy = false
-            res.onSuccess { message = DtcMessage(clearedText, failed = false); AiMechanic.cleared() }
-                .onFailure { message = DtcMessage(it.message ?: clearFailed, failed = true) }
+            val res = DiagService.clear(module)
+            tapped = false
+            res.onSuccess {
+                message = DtcMessage(if (byModule) context.getString(R.string.diag_cleared_module, module.name) else clearedText, failed = false)
+            }.onFailure { message = DtcMessage(it.message ?: clearFailed, failed = true) }
         }
+    }
+    val askModuleClear = rememberModuleClear(clearModule)
+    // One module (generic OBD-II): Clear clears it, as it always did. Several: the sheet, module by module.
+    val clearCodes: () -> Unit = {
+        val lone = scans?.singleOrNull()?.module
+        if (!byModule && lone != null) askModuleClear(lone) else showModules = true
     }
 
     val scan: () -> Unit = {
-        busy = true; message = null
+        tapped = true; message = null
         scope.launch {
-            val r = ObdBluetoothManager.readTroubleCodes()
-            busy = false
-            r.onSuccess { AiMechanic.report(it, announce = false) }
-                .onFailure { message = DtcMessage(it.message ?: scanFailed, failed = true) }
+            val r = DiagService.scanNow()
+            tapped = false
+            r.onFailure { message = DtcMessage(it.message ?: scanFailed, failed = true) }
         }
     }
     // A short tile shows the verdict alone; a tap on it opens the whole tile in a sheet.
@@ -240,19 +281,30 @@ internal fun ObdDtcCard(
                 val advice = adviceFor(diagnosis, codes.orEmpty(), code, index)
                 val builtIn = remember(code) { ObdCodes.describe(code) }
                 val number = carMessages.size + index + 1
+                val where = ai.where(code)
+                // Several modules: which ones reported it, and how (active, stored).
+                val statuses = DtcStatus.entries.associateWith { statusText(it).lowercase() }
+                val modules = if (byModule) where.joinToString(", ") { (s, d) -> s.module.id + " " + statuses.getValue(d.status) } else null
                 ProblemRow(
                     number = number, serious = codeSerious,
-                    title = (advice?.meaning?.ifBlank { null } ?: builtIn.localizedTitle()) + " · " + code,
-                    detail = advice?.checkFirst?.ifBlank { null }?.let { aiText.getString(R.string.ai_check_first, it) } ?: builtIn.localizedFix(),
+                    title = (advice?.meaning?.ifBlank { null } ?: ai.description(code) ?: builtIn.localizedTitle()) + " · " + code,
+                    detail = advice?.checkFirst?.ifBlank { null }?.let { aiText.getString(R.string.ai_check_first, it) }?.let { a -> modules?.let { "$it · $a" } ?: a }
+                        ?: modules ?: builtIn.localizedFix(),
                     source = stringResource(R.string.car_problem_from_code) + if (advice != null) "\n" + stringResource(R.string.car_problem_with_ai) else "",
-                    pending = code in pending,
+                    pending = !byModule && (code in pending || where.any { it.second.status == DtcStatus.PENDING }),
                     onOpen = if (advice != null) ({ opened = code }) else null,
                     selected = in3d && turnedTo == number,
-                    onSelect = if (in3d && mapProblems.any { it.number == number }) ({ picked = number }) else null
+                    onSelect = if (in3d && mapProblems.any { it.number == number }) ({ picked = number }) else null,
+                    active = where.any { it.second.status == DtcStatus.ACTIVE },
+                    muted = code in ai.muted, onToggleMute = { toggleMute(code) }
                 )
             }
         }
         if (carMessages.isNotEmpty() || !codes.isNullOrEmpty()) Spacer(Modifier.height(12.dp))
+        if (byModule && scans != null) {
+            ModuleSummary(scans) { showModules = true }
+            Spacer(Modifier.height(12.dp))
+        }
 
         if (!connected) {
             ObdNotConnected(connection, onConnect, onPickDevice)
@@ -272,6 +324,10 @@ internal fun ObdDtcCard(
             if (busy) {
                 Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = DashColors.Accent)
+                progressText?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, color = DashColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
             }
             message?.let {
                 Spacer(Modifier.height(8.dp))
@@ -304,7 +360,13 @@ internal fun ObdDtcCard(
                     Text(stringResource(R.string.vehicle_lamp_no_codes), color = DashColors.Warning, style = MaterialTheme.typography.bodyLarge)
                 } else if (codes.isEmpty()) {
                     Text(stringResource(R.string.ai_no_codes), color = DashColors.Good, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.vehicle_obd_scope), color = DashColors.Muted, style = MaterialTheme.typography.bodySmall)
+                    // A module-by-module scan saw more than the engine; the generic one says what it can't see.
+                    if (!byModule) {
+                        Text(
+                            stringResource(if (psa) R.string.vehicle_obd_scope else R.string.vehicle_obd_scope_any),
+                            color = DashColors.Muted, style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 } else {
                     // What the mechanic made of it all, under the numbered list (the banner already gave the verdict).
                     diagnosis?.let { d ->
@@ -346,7 +408,7 @@ internal fun ObdDtcCard(
             if (maxHeight < 200.dp) {
                 CompactFaults(
                     verdict = verdict, count = problemCount, names = problemNames, thinking = ai.thinking,
-                    connected = connected, busy = busy, message = message,
+                    connected = connected, busy = busy, message = message, progress = progressText,
                     map = if (mapProblems.isNotEmpty() && maxWidth >= 360.dp && maxHeight >= 160.dp) {
                         { CarProblemsMap(mapProblems, Modifier.size(width = 96.dp, height = 96.dp), compact = true) }
                     } else null,
@@ -382,6 +444,13 @@ internal fun ObdDtcCard(
         }
     }
 
+    if (showModules && scans != null) {
+        ModulesSheet(
+            scans = scans, canClear = connected && !busy, busy = busy, progress = progressText, message = message,
+            onClear = askModuleClear, onClose = { showModules = false }
+        )
+    }
+
     opened?.let { code ->
         val index = codes?.indexOf(code) ?: -1
         val advice = if (codes != null && index >= 0) adviceFor(diagnosis, codes, code, index) else null
@@ -405,6 +474,8 @@ private fun CompactFaults(
     connected: Boolean,
     busy: Boolean,
     message: DtcMessage?,
+    /** The module being read ("Reading ABS…"); null when none or for a generic scan. */
+    progress: String?,
     /** The car with its problems on it, small, before the summary; null where there's no room. */
     map: (@Composable () -> Unit)?,
     oneLine: Boolean,
@@ -433,7 +504,7 @@ private fun CompactFaults(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    names.joinToString(", ").ifEmpty { stringResource(verdict.hintRes) },
+                    progress ?: names.joinToString(", ").ifEmpty { stringResource(verdict.hintRes) },
                     color = DashColors.TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = if (oneLine) 1 else 2,
@@ -565,14 +636,21 @@ private fun VerdictBanner(verdict: CarVerdict, count: Int, lampOn: Boolean) {
  * the mechanic explained opens its detail sheet ([onOpen]).
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ProblemRow(
     number: Int, serious: Int, title: String, detail: String?, source: String, pending: Boolean, onOpen: (() -> Unit)?,
     /** The car in 3D is turned to it. */
     selected: Boolean = false,
     /** Turns the car in 3D to it; the details then open from the arrow alone. */
-    onSelect: (() -> Unit)? = null
+    onSelect: (() -> Unit)? = null,
+    /** A module reports it as present now: the row is tinted and outlined in the warning colour. */
+    active: Boolean = false,
+    /** The driver muted the code: dimmed, neutral, never highlighted. */
+    muted: Boolean = false,
+    /** Long tap: mutes the code, or unmutes it (null: the row has no mute, as the car's own messages). */
+    onToggleMute: (() -> Unit)? = null
 ) {
-    val colour = when (serious) { 2 -> DashColors.Critical; 1 -> DashColors.Warning; else -> DashColors.TextSecondary }
+    val colour = if (muted) DashColors.Muted else when (serious) { 2 -> DashColors.Critical; 1 -> DashColors.Warning; else -> DashColors.TextSecondary }
     val content: @Composable () -> Unit = { BoxWithConstraints {
         // A narrow tile gives the problem's words the whole row: where it comes from can go.
         val wide = maxWidth >= 380.dp
@@ -583,6 +661,7 @@ private fun ProblemRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, color = DashColors.TextPrimary, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (muted) MutedTag()
                 if (detail != null) {
                     Text(detail, color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
@@ -608,14 +687,42 @@ private fun ProblemRow(
             }
         }
     } }
-    val color = DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f)
-    val ring = if (selected) Modifier.border(1.5.dp, colour, DashShape.Medium) else Modifier
-    val tap = onSelect ?: onOpen
-    if (tap != null) {
-        Surface(onClick = tap, shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().then(ring)) { content() }
-    } else {
-        Surface(shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().then(ring)) { content() }
+    val lit = active && !muted
+    val color = if (lit) DashColors.Warning.copy(alpha = 0.14f) else DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f)
+    val ring = when {
+        selected -> Modifier.border(1.5.dp, colour, DashShape.Medium)
+        lit -> Modifier.border(1.dp, DashColors.Warning.copy(alpha = 0.6f), DashShape.Medium)
+        else -> Modifier
     }
+    val tap = onSelect ?: onOpen
+    val muteLabel = stringResource(if (muted) R.string.diag_unmute else R.string.diag_mute)
+    // A tap keeps its meaning (turn the car, open the advice); a long tap mutes or unmutes the code.
+    val press = if (tap != null || onToggleMute != null) {
+        Modifier.clip(DashShape.Medium).combinedClickable(
+            onClick = { tap?.invoke() },
+            onLongClickLabel = muteLabel,
+            onLongClick = onToggleMute
+        )
+    } else Modifier
+    Surface(shape = DashShape.Medium, color = color, modifier = Modifier.fillMaxWidth().alpha(if (muted) 0.55f else 1f).then(ring).then(press)) { content() }
+}
+
+/** The small "muted" mark under a muted code: the bell with a slash, and the word. */
+@Composable
+private fun MutedTag() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.NotificationsOff, contentDescription = null, tint = DashColors.TextSecondary, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(stringResource(R.string.diag_muted), color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/** What a long tap on a code runs: it is muted, or unmuted, with the tap feedback. */
+@Composable
+private fun rememberMuteToggle(): (String) -> Unit {
+    val context = LocalContext.current
+    val feedback = rememberTapFeedback()
+    return { code -> MutedCodes.toggle(context, code); feedback() }
 }
 
 /**
@@ -638,6 +745,234 @@ internal fun rememberClearCodes(onClear: () -> Unit): () -> Unit {
         )
     }
     return { lock.whenParked { asking = true } }
+}
+
+/**
+ * Clear for one module: parked only, with a confirm naming the module, and for a [ClearRisk.SENSITIVE] one (airbags,
+ * immobilizer, engine) a second warning about adaptations and lamps. Returns what the Clear buttons call.
+ */
+@Composable
+private fun rememberModuleClear(onClear: (DiagModule) -> Unit): (DiagModule) -> Unit {
+    val lock = LocalDriveLock.current
+    var asking by remember { mutableStateOf<DiagModule?>(null) }
+    var warning by remember { mutableStateOf<DiagModule?>(null) }
+    asking?.let { module ->
+        ParkedOnly { asking = null }
+        ConfirmDialog(
+            title = stringResource(R.string.diag_clear_module_title, module.name),
+            body = stringResource(R.string.vehicle_clear_confirm_body),
+            action = stringResource(R.string.vehicle_clear),
+            onConfirm = {
+                asking = null
+                if (module.clearRisk == ClearRisk.SENSITIVE) warning = module else onClear(module)
+            },
+            onDismiss = { asking = null }
+        )
+    }
+    warning?.let { module ->
+        ParkedOnly { warning = null }
+        ConfirmDialog(
+            title = stringResource(R.string.diag_clear_sensitive_title, module.name),
+            body = stringResource(R.string.diag_clear_sensitive_body),
+            action = stringResource(R.string.vehicle_clear),
+            onConfirm = { warning = null; onClear(module) },
+            onDismiss = { warning = null }
+        )
+    }
+    return { module -> lock.whenParked { asking = module } }
+}
+
+/** "Active", "Pending", "Stored". */
+@Composable
+private fun statusText(status: DtcStatus): String = stringResource(
+    when (status) {
+        DtcStatus.ACTIVE -> R.string.diag_status_active
+        DtcStatus.PENDING -> R.string.diag_status_pending
+        DtcStatus.STORED -> R.string.diag_status_stored
+    }
+)
+
+/** A module answered with codes, or with a count of them (a first frame only). */
+private val ModuleScan.faulty: Boolean get() = codes.isNotEmpty() || (countReported ?: 0) > 0
+
+/** A module that read: with or without faults. */
+private val ModuleScan.answered: Boolean get() = outcome == ScanOutcome.OK || outcome == ScanOutcome.PARTIAL
+
+/** "12 faults in 8 modules · 2 active", and the button to the sheet. */
+@Composable
+private fun ModuleSummary(scans: List<ModuleScan>, onOpen: () -> Unit) {
+    val muted by MutedCodes.codes.collectAsState()
+    val faulty = scans.filter { it.faulty }
+    // Muted codes are not counted as faults or as active: they get a count of their own.
+    val mutedCount = scans.sumOf { s -> s.codes.count { it.code in muted } }
+    val total = faulty.sumOf { maxOf(it.codes.size, it.countReported ?: 0) } - mutedCount
+    val active = scans.sumOf { s -> s.codes.count { it.status == DtcStatus.ACTIVE && it.code !in muted } }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            if (total > 0) {
+                Text(
+                    pluralStringResource(R.plurals.diag_faults_in_modules, total, total, faulty.size),
+                    color = DashColors.TextPrimary, style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            if (mutedCount > 0) {
+                Text(stringResource(R.string.diag_muted_count, mutedCount), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (active > 0) {
+                Text(pluralStringResource(R.plurals.diag_active_count, active, active), color = DashColors.Warning, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        TextButton(onClick = onOpen) { Text(stringResource(R.string.diag_by_module), color = DashColors.AccentInk) }
+    }
+}
+
+/**
+ * The codes module by module: the modules with faults first (each with its own Clear), then the clean ones on one
+ * line, then those that didn't answer, folded.
+ */
+@Composable
+private fun ModulesSheet(
+    scans: List<ModuleScan>,
+    canClear: Boolean,
+    busy: Boolean,
+    progress: String?,
+    message: DtcMessage?,
+    onClear: (DiagModule) -> Unit,
+    onClose: () -> Unit
+) {
+    val faulty = scans.filter { it.faulty }
+    val clean = scans.filter { !it.faulty && it.answered }
+    val silent = scans.filter { !it.faulty && !it.answered }
+    var unfolded by remember { mutableStateOf(false) }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Surface(
+            shape = DashShape.Large,
+            color = DashColors.Card.copy(alpha = 1f),
+            // Docked app windows are drawn above dialogs on this unit; the ones under it step aside.
+            modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth(0.94f).fillMaxHeight(0.94f).keepClearOfWindows()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.diag_sheet_title),
+                        color = DashColors.AccentInk, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.ai_close), tint = DashColors.TextSecondary)
+                    }
+                }
+                if (busy) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = DashColors.Accent)
+                    progress?.let { Text(it, color = DashColors.TextSecondary, style = MaterialTheme.typography.bodySmall) }
+                    Spacer(Modifier.height(6.dp))
+                }
+                message?.let {
+                    Text(it.text, color = if (it.failed) DashColors.Warning else DashColors.Good, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(6.dp))
+                }
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    faulty.forEach { ModuleBlock(it, canClear, onClear) }
+                    if (clean.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = DashColors.Good, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.diag_clean_modules, clean.joinToString(", ") { it.module.name }),
+                                color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    if (silent.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clip(DashShape.Medium).clickable { unfolded = !unfolded }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                pluralStringResource(R.plurals.diag_not_answered, silent.size, silent.size),
+                                color = DashColors.Muted, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)
+                            )
+                            Icon(if (unfolded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = DashColors.Muted)
+                        }
+                        if (unfolded) {
+                            silent.forEach { s ->
+                                val why = stringResource(
+                                    when (s.outcome) {
+                                        ScanOutcome.REFUSED -> R.string.diag_outcome_refused
+                                        ScanOutcome.ERROR -> R.string.diag_outcome_error
+                                        else -> R.string.diag_outcome_no_response
+                                    }
+                                )
+                                Text("${s.module.name} (${s.module.id}): $why", color = DashColors.Muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One module with faults: its name, how many, its Clear, and each code with its status and meaning. */
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun ModuleBlock(scan: ModuleScan, canClear: Boolean, onClear: (DiagModule) -> Unit) {
+    val reported = scan.countReported ?: scan.codes.size
+    val muted by MutedCodes.codes.collectAsState()
+    val toggleMute = rememberMuteToggle()
+    Surface(shape = DashShape.Medium, color = DashColors.CardHi.copy(alpha = DashColors.CardHi.alpha * 0.6f), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${scan.module.name} (${scan.module.id})", color = DashColors.TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (scan.outcome == ScanOutcome.PARTIAL && reported > scan.codes.size) {
+                            stringResource(R.string.diag_module_partial, reported, scan.codes.size)
+                        } else pluralStringResource(R.plurals.diag_module_faults, reported, reported),
+                        color = DashColors.TextSecondary, style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (scan.module.clearSteps.isNotEmpty()) {
+                    TextButton(enabled = canClear, onClick = { onClear(scan.module) }) {
+                        Text(stringResource(R.string.vehicle_clear), color = if (canClear) DashColors.AccentInk else DashColors.Muted)
+                    }
+                }
+            }
+            scan.codes.forEach { d ->
+                val isMuted = d.code in muted
+                val active = d.status == DtcStatus.ACTIVE && !isMuted
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clip(DashShape.Small)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClickLabel = stringResource(if (isMuted) R.string.diag_unmute else R.string.diag_mute),
+                            onLongClick = { toggleMute(d.code) }
+                        )
+                        .alpha(if (isMuted) 0.55f else 1f)
+                        .let { if (active) it.background(DashColors.Warning.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 4.dp) else it }
+                ) {
+                    CodeBadge(d.code, if (active) Severity.STOP else null, muted = isMuted)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            d.description ?: ObdCodes.describe(d.code).localizedTitle(),
+                            color = DashColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            statusText(d.status),
+                            color = if (active) DashColors.Warning else DashColors.TextSecondary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        if (isMuted) MutedTag()
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -693,8 +1028,8 @@ private fun AiDisclaimer(d: Diagnosis, aiText: Resources) {
 
 /** A code on a coloured badge, the way a garage printout sets it apart. */
 @Composable
-private fun CodeBadge(code: String, severity: Severity?, large: Boolean = false) {
-    val color = severityColor(severity)
+private fun CodeBadge(code: String, severity: Severity?, large: Boolean = false, muted: Boolean = false) {
+    val color = if (muted) DashColors.Muted else severityColor(severity)
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
