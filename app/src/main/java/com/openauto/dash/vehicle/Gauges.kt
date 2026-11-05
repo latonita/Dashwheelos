@@ -108,6 +108,22 @@ fun rememberGaugeInt(key: Key<Double>): Int? {
     return remember(v) { v?.roundToInt() }
 }
 
+/** Whether the engine is not running, from a revs sample: no answer, or 0. */
+fun engineOffOf(rpm: Double?): Boolean = rpm == null || rpm.roundToInt() == 0
+
+/**
+ * Whether the engine is off (no revs, or 0). Unlike [rememberGaugeInt] it recomposes its reader
+ * only when the answer flips, not on every change of the revs.
+ */
+@Composable
+fun rememberEngineOff(): Boolean {
+    val flow = remember {
+        Vehicle.bus.sample(K.RPM).map { s -> engineOffOf(s?.takeUnless { it.quality == Quality.ESTIMATED }?.value) }.distinctUntilChanged()
+    }
+    val off by flow.collectAsState(remember { engineOffOf(Vehicle.bus.now(K.RPM)) })
+    return off
+}
+
 /** Standing demand for all of [keys] (see [VehicleBus.hold]); release it when the owner stops. */
 fun VehicleBus.holdAll(keys: Collection<Key<*>>): Hold {
     val holds = keys.map { hold(it) }
