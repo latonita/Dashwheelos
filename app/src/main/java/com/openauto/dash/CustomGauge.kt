@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -35,6 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -106,62 +111,83 @@ internal fun CustomGaugeCard(config: GaugeConfig, modifier: Modifier = Modifier)
     val (lo, hi) = remember(config, key?.unit) { gaugeRange(config, key?.unit) }
     val fraction = gaugeFraction(value, lo, hi)
     val text = formatGaugeValue(value, gu)
+    val zone = remember(config, lo, hi) { redZone(config, lo, hi) }
+    val inRed = inRedZone(value, config) && zone != null
     Card(modifier = modifier) {
-        Column(modifier = Modifier.fillMaxSize().padding(DashSpace.Lg), verticalArrangement = Arrangement.spacedBy(DashSpace.Sm)) {
-            TileHeader(if (key != null) gaugeKeyTitle(key) else stringResource(R.string.gauge_kind)) {
-                if (gu.label.isNotEmpty()) {
-                    Text(gu.label, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // One row high (a bar tile): the title and the bar, whatever the style; a number keeps its figure beside the title.
+            val compact = maxHeight < COMPACT_HEIGHT
+            val style = if (compact && config.style != GaugeStyle.NUMBER) GaugeStyle.BAR_H else config.style
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = DashSpace.Lg, vertical = if (compact) DashSpace.Sm else DashSpace.Lg),
+                verticalArrangement = Arrangement.spacedBy(if (compact) DashSpace.Xs else DashSpace.Sm)
+            ) {
+                TileHeader(if (key != null) gaugeKeyTitle(key) else stringResource(R.string.gauge_kind)) {
+                    if (compact && style == GaugeStyle.NUMBER && key != null) {
+                        Text(text, color = if (value == null) DashColors.Muted else DashColors.TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                    if (gu.label.isNotEmpty()) {
+                        Text(gu.label, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                    }
                 }
-            }
-            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                when {
-                    key == null -> Text(
-                        stringResource(if (config.keyId == null) R.string.gauge_pick_hint else R.string.gauge_unknown_signal),
-                        color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center
-                    )
-                    config.style == GaugeStyle.DIAL -> AnalogGauge(
-                        value = ((value ?: lo) - lo).toFloat(),
-                        maxValue = (hi - lo).toFloat(),
-                        valueText = text,
-                        label = "",
-                        unit = gu.label,
-                        accent = DashColors.Accent,
-                        modifier = Modifier.fillMaxSize(),
-                        // No redline: this tile knows the signal's scale, not its limits.
-                        redlineFraction = 1.0001f,
-                        dimmed = value == null
-                    )
-                    config.style == GaugeStyle.BAR_H -> Column(verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-                        BigNumber(text, value == null, Modifier.fillMaxWidth().weight(1f))
-                        GaugeBar(fraction, vertical = false, modifier = Modifier.fillMaxWidth().height(14.dp))
-                        Spacer(Modifier.height(DashSpace.Xs))
-                        ScaleEnds(lo, hi, gu)
-                    }
-                    config.style == GaugeStyle.BAR_V -> Row(horizontalArrangement = Arrangement.spacedBy(DashSpace.Lg), modifier = Modifier.fillMaxSize()) {
-                        GaugeBar(fraction, vertical = true, modifier = Modifier.width(26.dp).fillMaxHeight())
-                        Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                            Text(formatGaugeValue(hi, gu), color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                            BigNumber(text, value == null, Modifier.fillMaxWidth().weight(1f, fill = false))
-                            Text(formatGaugeValue(lo, gu), color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    when {
+                        key == null -> Text(
+                            stringResource(if (config.keyId == null) R.string.gauge_pick_hint else R.string.gauge_unknown_signal),
+                            color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                            maxLines = if (compact) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis
+                        )
+                        compact && style == GaugeStyle.NUMBER -> Unit
+                        style == GaugeStyle.DIAL -> AnalogGauge(
+                            value = ((value ?: lo) - lo).toFloat(),
+                            maxValue = (hi - lo).toFloat(),
+                            valueText = text,
+                            label = "",
+                            unit = gu.label,
+                            accent = DashColors.Accent,
+                            modifier = Modifier.fillMaxSize(),
+                            // No red zone unless the driver set one: this tile knows the scale, not the limits.
+                            redlineFraction = if (zone != null && !config.redBelow) zone.from else 1.0001f,
+                            redBelowFraction = if (zone != null && config.redBelow) zone.to else 0f,
+                            dimmed = value == null
+                        )
+                        style == GaugeStyle.BAR_H -> Column(verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
+                            // The bar alone: no figure, the title says what it is.
+                            GaugeBar(fraction, vertical = false, zone = zone, inRed = inRed, modifier = Modifier.fillMaxWidth().height(14.dp))
+                            if (!compact) {
+                                Spacer(Modifier.height(DashSpace.Xs))
+                                ScaleEnds(lo, hi, gu)
+                            }
                         }
+                        style == GaugeStyle.BAR_V -> Row(horizontalArrangement = Arrangement.spacedBy(DashSpace.Lg), modifier = Modifier.fillMaxSize()) {
+                            GaugeBar(fraction, vertical = true, zone = zone, inRed = inRed, modifier = Modifier.width(26.dp).fillMaxHeight())
+                            Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                                Text(formatGaugeValue(hi, gu), color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                BigNumber(text, value == null, inRed, Modifier.fillMaxWidth().weight(1f, fill = false))
+                                Text(formatGaugeValue(lo, gu), color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            }
+                        }
+                        else -> BigNumber(text, value == null, inRed, Modifier.fillMaxSize())
                     }
-                    else -> BigNumber(text, value == null, Modifier.fillMaxSize())
                 }
             }
         }
     }
 }
 
+/** Under this a tile is one row high: a title and a bar. */
+private val COMPACT_HEIGHT = 110.dp
+
 /** The figure, as large as its box allows. */
 @Composable
-private fun BigNumber(text: String, dimmed: Boolean, modifier: Modifier = Modifier) {
+private fun BigNumber(text: String, dimmed: Boolean, red: Boolean, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
         // A digit is about 0.6 em wide: the size that fits the width, held by the height.
         val byWidth = maxWidth.value / (text.length.coerceAtLeast(2) * 0.62f)
         val size = minOf(byWidth, maxHeight.value * 0.8f, 120f).coerceAtLeast(14f)
         Text(
             text,
-            color = if (dimmed) DashColors.Muted else DashColors.TextPrimary,
+            color = if (dimmed) DashColors.Muted else if (red) DashColors.Critical else DashColors.TextPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = size.sp,
             maxLines = 1,
@@ -183,22 +209,35 @@ private fun ScaleEnds(lo: Double, hi: Double, gu: GaugeUnit) {
  * theme gives the rev bar; empty while there is no [fraction].
  */
 @Composable
-private fun GaugeBar(fraction: Float?, vertical: Boolean, modifier: Modifier = Modifier) {
+private fun GaugeBar(fraction: Float?, vertical: Boolean, zone: GaugeRedZone?, inRed: Boolean, modifier: Modifier = Modifier) {
     // Read only while drawing, so the slide redraws the bar and does not recompose the tile.
     val shown = animateFloatAsState(targetValue = fraction ?: 0f, animationSpec = tween(durationMillis = 400), label = "gaugeBar")
     val accent = DashColors.Accent
     val accent2 = DashColors.Accent2
     val glow = DashColors.Glow
+    val critical = DashColors.Critical
     // Bare themes have no card behind the bar, so a background-coloured track would vanish.
     val track = if (DashColors.Glass) DashColors.well(0.35f) else if (DashColors.Bare) DashColors.CardHi else DashColors.Background
     Spacer(
         modifier = modifier.drawWithCache {
             val thick = if (vertical) size.width else size.height
             val corner = CornerRadius(thick / 2f)
-            val fill = if (vertical) Brush.verticalGradient(listOf(accent2, accent), startY = 0f, endY = size.height)
+            val fill: Brush = if (inRed) SolidColor(critical) else if (vertical) Brush.verticalGradient(listOf(accent2, accent), startY = 0f, endY = size.height)
                 else Brush.horizontalGradient(listOf(accent, accent2), endX = size.width)
             onDrawBehind {
                 drawRoundRect(color = track, size = size, cornerRadius = corner)
+                if (zone != null) {
+                    // The red part of the track, clipped to its rounded ends.
+                    val path = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, corner)) }
+                    clipPath(path) {
+                        val red = critical.copy(alpha = 0.45f)
+                        if (vertical) {
+                            drawRect(red, Offset(0f, size.height * (1f - zone.to)), Size(size.width, size.height * (zone.to - zone.from)))
+                        } else {
+                            drawRect(red, Offset(size.width * zone.from, 0f), Size(size.width * (zone.to - zone.from), size.height))
+                        }
+                    }
+                }
                 val f = shown.value
                 if (f <= 0f) return@onDrawBehind
                 val fillSize = if (vertical) Size(size.width, size.height * f) else Size(size.width * f, size.height)
@@ -237,12 +276,16 @@ internal fun CustomGaugeDialog(initial: GaugeConfig, onSave: (GaugeConfig) -> Un
     val key = remember(keyId) { gaugeKeyById(keyId) }
     val gu = rememberGaugeUnit(key)
     // The scale's ends are typed in the shown unit; blank is the usual scale.
+    var redBelow by remember { mutableStateOf(initial.redBelow) }
+    var redText by remember { mutableStateOf(initial.red?.let { v -> key?.let { formatGaugeEnd(v, gu) } }.orEmpty()) }
     var minText by remember { mutableStateOf(initial.min?.let { v -> key?.let { formatGaugeEnd(v, gu) } }.orEmpty()) }
     var maxText by remember { mutableStateOf(initial.max?.let { v -> key?.let { formatGaugeEnd(v, gu) } }.orEmpty()) }
     val keys = remember { gaugeKeys() }
     val titles = keys.associateWith { gaugeKeyTitle(it) }
     val groups = groupGaugeKeys(keys, name = { titles.getValue(it) }, tag = { it })
     val tap = rememberTapFeedback()
+    val units by Units.current.collectAsState()
+    val pressure = PressureUnit.BAR
     // The usual scale, in the shown unit, as the fields' hint.
     val (defLo, defHi) = defaultGaugeRange(keyId, key?.unit)
     val shownScaleUnit = if (gu.fromShown != null) gu.label else key?.unit.orEmpty()
@@ -257,7 +300,9 @@ internal fun CustomGaugeDialog(initial: GaugeConfig, onSave: (GaugeConfig) -> Un
                     GaugeConfig(
                         keyId = keyId, style = style,
                         min = if (key == null) null else parseGaugeEnd(minText, gu),
-                        max = if (key == null) null else parseGaugeEnd(maxText, gu)
+                        max = if (key == null) null else parseGaugeEnd(maxText, gu),
+                        red = if (key == null) null else parseGaugeEnd(redText, gu),
+                        redBelow = redBelow
                     )
                 )
             }
@@ -274,7 +319,15 @@ internal fun CustomGaugeDialog(initial: GaugeConfig, onSave: (GaugeConfig) -> Un
             PickerLabel(stringResource(R.string.gauge_range, shownScaleUnit))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 ScaleField(stringResource(R.string.gauge_min), minText, formatGaugeEnd(defLo, gu), { minText = it }, Modifier.weight(1f))
+                ScaleField(stringResource(R.string.gauge_red), redText, stringResource(R.string.gauge_red_none), { redText = it }, Modifier.weight(1f))
                 ScaleField(stringResource(R.string.gauge_max), maxText, formatGaugeEnd(defHi, gu), { maxText = it }, Modifier.weight(1f))
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = DashSize.Touch),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(stringResource(R.string.gauge_red_below), color = DashColors.TextPrimary, modifier = Modifier.weight(1f))
+                Switch(checked = redBelow, onCheckedChange = { redBelow = it })
             }
             Text(stringResource(R.string.gauge_range_default), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
         }
@@ -292,6 +345,10 @@ internal fun CustomGaugeDialog(initial: GaugeConfig, onSave: (GaugeConfig) -> Un
                     if (k.id != keyId) {
                         // The old signal's scale means nothing for the new one.
                         keyId = k.id; minText = ""; maxText = ""
+                        // Its usual alarm, to keep, change or clear.
+                        val red = defaultGaugeRed(k.id)
+                        redText = red?.let { formatGaugeEnd(it.first, gaugeUnit(k.unit, units, pressure)) }.orEmpty()
+                        redBelow = red?.second ?: false
                     }
                 }
             }

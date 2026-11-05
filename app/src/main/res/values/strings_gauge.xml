@@ -52,4 +52,7 @@
     <string name="gauge_domain_climate">Climate</string>
     <string name="gauge_domain_driver_aids">Driver aids</string>
     <string name="gauge_domain_identity">Identity</string>
+    <string name="gauge_red">Red from</string>
+    <string name="gauge_red_none">none</string>
+    <string name="gauge_red_below">Red below that value instead (for low alarms)</string>
 </resources>

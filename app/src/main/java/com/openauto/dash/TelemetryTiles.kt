@@ -517,7 +517,9 @@ internal fun AnalogGauge(
     majorTicks: Int = 9,
     // Hero style (telemetry speed): tick labels, glowing tip dot instead of a
     // needle, and large gradient numerals - the mockup's instrument cluster.
-    hero: Boolean = false
+    hero: Boolean = false,
+    // A red zone at the low end, from the start of the scale to this fraction (0 = none): for readings that alarm when low.
+    redBelowFraction: Float = 0f
 ) {
     if (DashColors.Original) {
         OriginalAnalogGauge(
@@ -582,7 +584,8 @@ internal fun AnalogGauge(
             val redline = SolidColor(redlineAccent)
             onDrawBehind {
                 val frac = sweep.value
-                val sweepColor = if (frac >= redlineFraction) redlineAccent else accent
+                val inRed = frac >= redlineFraction || (!dimmed && redBelowFraction > 0f && frac <= redBelowFraction)
+                val sweepColor = if (inRed) redlineAccent else accent
                 val needleColor = if (dimmed) muted else sweepColor
 
                 // Base track.
@@ -605,10 +608,21 @@ internal fun AnalogGauge(
                     size = arcSize,
                     style = line
                 )
+                if (redBelowFraction > 0f) {
+                    drawArc(
+                        color = redlineAccent.copy(alpha = 0.35f),
+                        startAngle = startAngle,
+                        sweepAngle = sweepTotal * redBelowFraction,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = line
+                    )
+                }
                 // Active sweep: accent->accent2 gradient along the arc, a wide soft
                 // halo underneath (scaled by the theme's glow) and a bright core line.
                 if (frac > 0f) {
-                    val sweepBrush: Brush = if (frac >= redlineFraction) redline else gradient
+                    val sweepBrush: Brush = if (inRed) redline else gradient
                     if (glow > 0f) {
                         drawArc(
                             brush = sweepBrush,

@@ -231,7 +231,7 @@ fun BuiltinKind.minSize(): Pair<Int, Int> = when (this) {
     // One card of words: a sentence needs the width.
     BuiltinKind.NOW -> 3 to 2
     // A gauge or a picture with a few lines under it.
-    BuiltinKind.TELEMETRY, BuiltinKind.OBD_ALL, BuiltinKind.OBD_DTC, BuiltinKind.RANGE, BuiltinKind.DOORS, BuiltinKind.COMPASS, BuiltinKind.CUSTOM_GAUGE,
+    BuiltinKind.TELEMETRY, BuiltinKind.OBD_ALL, BuiltinKind.OBD_DTC, BuiltinKind.RANGE, BuiltinKind.DOORS, BuiltinKind.COMPASS,
     BuiltinKind.GFORCE, BuiltinKind.NAVIGATION, BuiltinKind.MEDIA, BuiltinKind.FILTER_CARE, BuiltinKind.MY_CAR, BuiltinKind.ECO_DRIVE,
     BuiltinKind.SERVICE, BuiltinKind.CAR_STATUS, BuiltinKind.TYRES, BuiltinKind.HEAD_UNIT -> 2 to 2
     // One reading and a caption.

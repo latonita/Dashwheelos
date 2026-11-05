@@ -27,10 +27,58 @@ class CustomGaugeTest {
         assertEquals(c, GaugeConfig.decode(c.encode()))
         // The defaults stay blank in the string.
         val d = GaugeConfig("rpm", GaugeStyle.NUMBER)
-        assertEquals("g1|rpm|NUMBER||", d.encode())
+        assertEquals("g2|rpm|NUMBER||||0", d.encode())
         assertEquals(d, GaugeConfig.decode(d.encode()))
         assertEquals(GaugeConfig(), GaugeConfig.decode(GaugeConfig().encode()))
         assertEquals(GaugeConfig("steering_angle", GaugeStyle.DIAL, -540.0, 540.0), GaugeConfig.decode("g1|steering_angle|DIAL|-540|540"))
+        // The red zone travels with it.
+        val red = GaugeConfig("battery_volts", GaugeStyle.BAR_H, 9.0, 16.0, red = 11.8, redBelow = true)
+        assertEquals(red, GaugeConfig.decode(red.encode()))
+        assertEquals("g2|rpm|DIAL|||6000|0", GaugeConfig("rpm", red = 6000.0).encode())
+    }
+
+    @Test
+    fun theFirstFormatStillReadsWithoutAZone() {
+        val old = GaugeConfig.decode("g1|battery_volts|BAR_H|10|15")
+        assertEquals(GaugeConfig("battery_volts", GaugeStyle.BAR_H, 10.0, 15.0), old)
+        assertNull(old.red)
+        assertFalse(old.redBelow)
+        // A g1 string never carries a zone, even with stray fields.
+        assertNull(GaugeConfig.decode("g1|rpm|DIAL|||6000|1").red)
+    }
+
+    @Test
+    fun theRedZoneRunsFromTheThresholdOrUpToIt() {
+        val above = GaugeConfig("rpm", min = 0.0, max = 8000.0, red = 6000.0)
+        assertEquals(GaugeRedZone(0.75f, 1f), redZone(above, 0.0, 8000.0))
+        assertTrue(inRedZone(6000.0, above) && inRedZone(7000.0, above))
+        assertFalse(inRedZone(5999.0, above))
+        val below = GaugeConfig("battery_volts", red = 12.0, redBelow = true)
+        assertEquals(GaugeRedZone(0f, 0.5f), redZone(below, 10.0, 14.0))
+        assertTrue(inRedZone(11.0, below) && inRedZone(12.0, below))
+        assertFalse(inRedZone(12.1, below))
+        // No value, no red; no threshold, no zone.
+        assertFalse(inRedZone(null, above))
+        assertNull(redZone(GaugeConfig("rpm"), 0.0, 8000.0))
+        assertFalse(inRedZone(9999.0, GaugeConfig("rpm")))
+        // A threshold off the scale draws nothing.
+        assertNull(redZone(GaugeConfig("rpm", red = 9000.0, redBelow = true).copy(redBelow = false, red = 8000.0), 0.0, 8000.0))
+        assertNull(redZone(GaugeConfig("rpm", red = 0.0, redBelow = true), 0.0, 8000.0))
+        assertEquals(GaugeRedZone(0.5f, 1f), redZone(GaugeConfig("x", red = 12.0), 10.0, 14.0))
+    }
+
+    @Test
+    fun onlyTheUsualAlarmsStartWithARedZone() {
+        assertEquals(6000.0 to false, defaultGaugeRed("rpm"))
+        assertEquals(105.0 to false, defaultGaugeRed("coolant_temp"))
+        assertEquals(11.8 to true, defaultGaugeRed("battery_volts"))
+        assertNull(defaultGaugeRed("vehicle_speed"))
+        assertNull(defaultGaugeRed(null))
+    }
+
+    @Test
+    fun aGaugeTileCanBeOneRowHigh() {
+        assertEquals(2 to 1, BuiltinKind.CUSTOM_GAUGE.minSize())
     }
 
     @Test
@@ -39,7 +87,7 @@ class CustomGaugeTest {
         assertEquals(GaugeConfig(), GaugeConfig.decode(""))
         assertEquals(GaugeConfig(), GaugeConfig.decode("nonsense"))
         // A newer build's format, and a style this build lacks.
-        assertEquals(GaugeConfig(), GaugeConfig.decode("g2|rpm|DIAL||"))
+        assertEquals(GaugeConfig(), GaugeConfig.decode("g3|rpm|DIAL||"))
         assertEquals(GaugeConfig("rpm", GaugeStyle.DIAL), GaugeConfig.decode("g1|rpm|HOLOGRAM||"))
         assertEquals(GaugeConfig("rpm", GaugeStyle.BAR_V, null, null), GaugeConfig.decode("g1|rpm|BAR_V|abc|NaN"))
     }

@@ -19,34 +19,72 @@ enum class GaugeStyle { DIAL, BAR_H, BAR_V, NUMBER }
  * One tile's settings. [keyId] is a [Key.id] on the vehicle bus (null until
  * the driver has picked one); [min] / [max] are the dial's and bars' ends in
  * the key's own (metric) unit, null for the default of [defaultGaugeRange].
+ * [red] is where the red zone starts (null = no red zone): from there up to
+ * the end of the scale, or with [redBelow] from the start of the scale up to it.
  */
 data class GaugeConfig(
     val keyId: String? = null,
     val style: GaugeStyle = GaugeStyle.DIAL,
     val min: Double? = null,
-    val max: Double? = null
+    val max: Double? = null,
+    val red: Double? = null,
+    val redBelow: Boolean = false
 ) {
-    /** `g1|key|STYLE|min|max`; an empty field is the default. Key ids never hold a `|`. */
+    /** `g2|key|STYLE|min|max|red|below` (below is 1 or 0); an empty field is the default. Key ids never hold a `|`. */
     fun encode(): String = listOf(
-        "g1", keyId.orEmpty(), style.name, min?.let(::number).orEmpty(), max?.let(::number).orEmpty()
+        "g2", keyId.orEmpty(), style.name, min?.let(::number).orEmpty(), max?.let(::number).orEmpty(),
+        red?.let(::number).orEmpty(), if (redBelow) "1" else "0"
     ).joinToString("|")
 
     companion object {
-        /** What [encode] wrote; anything unreadable is the blank config (nothing picked, a dial). */
+        /** What [encode] wrote (or the first format, `g1`, which had no red zone); anything unreadable is the blank config (nothing picked, a dial). */
         fun decode(text: String?): GaugeConfig {
             val p = text?.split('|') ?: return GaugeConfig()
-            if (p.size < 3 || p[0] != "g1") return GaugeConfig()
+            if (p.size < 3 || (p[0] != "g1" && p[0] != "g2")) return GaugeConfig()
             val style = GaugeStyle.entries.firstOrNull { it.name == p[2] } ?: GaugeStyle.DIAL
+            fun num(i: Int) = p.getOrNull(i)?.toDoubleOrNull()?.takeIf { it.isFinite() }
+            val v2 = p[0] == "g2"
             return GaugeConfig(
                 keyId = p[1].ifBlank { null },
                 style = style,
-                min = p.getOrNull(3)?.toDoubleOrNull()?.takeIf { it.isFinite() },
-                max = p.getOrNull(4)?.toDoubleOrNull()?.takeIf { it.isFinite() }
+                min = num(3),
+                max = num(4),
+                red = if (v2) num(5) else null,
+                redBelow = v2 && p.getOrNull(6) == "1"
             )
         }
 
         private fun number(v: Double): String = if (v == Math.rint(v) && kotlin.math.abs(v) < 1e9) v.toLong().toString() else v.toString()
     }
+}
+
+/** Where the red zone sits on a 0..1 scale: [from]..[to], or null for none. */
+internal data class GaugeRedZone(val from: Float, val to: Float)
+
+/** The red zone of [config] on the scale [min]..[max]: red to the end, or with redBelow from the start to red; null without a red value or when it falls outside the scale. */
+internal fun redZone(config: GaugeConfig, min: Double, max: Double): GaugeRedZone? {
+    val red = config.red ?: return null
+    if (max <= min || red >= max && !config.redBelow || red <= min && config.redBelow) return null
+    val f = ((red - min) / (max - min)).toFloat().coerceIn(0f, 1f)
+    return if (config.redBelow) GaugeRedZone(0f, f) else GaugeRedZone(f, 1f)
+}
+
+/** Whether [value] is in the red zone (at the threshold counts); false without a value or a zone. */
+internal fun inRedZone(value: Double?, config: GaugeConfig): Boolean {
+    val red = config.red ?: return false
+    if (value == null || !value.isFinite()) return false
+    return if (config.redBelow) value <= red else value >= red
+}
+
+/**
+ * The red zone a signal starts with when it is picked, which the driver can change or clear: the redline for the
+ * revs, a hot engine, a flat battery. (threshold in the key's unit, whether the zone is below it); null for the rest.
+ */
+internal fun defaultGaugeRed(keyId: String?): Pair<Double, Boolean>? = when (keyId) {
+    "rpm" -> 6000.0 to false
+    "coolant_temp" -> 105.0 to false
+    "battery_volts" -> 11.8 to true
+    else -> null
 }
 
 /**
