@@ -171,6 +171,48 @@ class XyautoBusPublisherTest {
     }
 
     @Test
+    fun consumption_isFlowOverSpeedTimes100() {
+        apply(CanboxValue.FuelFlowLph(6.0), CanboxValue.SpeedKmh(80))
+        assertEquals(7.5, read(K.FUEL_CONSUMPTION)!!, 1e-9)
+    }
+
+    @Test
+    fun consumption_belowFiveKmhIsWithdrawn() {
+        apply(CanboxValue.FuelFlowLph(1.0), CanboxValue.SpeedKmh(60))
+        assertTrue(read(K.FUEL_CONSUMPTION) != null)
+        apply(CanboxValue.SpeedKmh(4))
+        assertNull(read(K.FUEL_CONSUMPTION))
+        apply(CanboxValue.SpeedKmh(0))
+        assertNull(read(K.FUEL_CONSUMPTION))
+        apply(CanboxValue.SpeedKmh(5))
+        assertEquals(20.0, read(K.FUEL_CONSUMPTION)!!, 1e-9)
+    }
+
+    @Test
+    fun consumption_aFlowWithdrawalWithdrawsIt() {
+        apply(CanboxValue.FuelFlowLph(6.0), CanboxValue.SpeedKmh(80))
+        apply(CanboxValue.FuelFlowLph(null))
+        assertNull(read(K.FUEL_CONSUMPTION))
+    }
+
+    @Test
+    fun consumption_zeroFlowIsZero() {
+        apply(CanboxValue.SpeedKmh(90), CanboxValue.FuelFlowLph(0.0))
+        assertEquals(0.0, read(K.FUEL_CONSUMPTION)!!, 0.0)
+    }
+
+    @Test
+    fun consumption_aSpeedUpdateRecomputesWithTheHeldFlow() {
+        apply(CanboxValue.FuelFlowLph(6.0), CanboxValue.SpeedKmh(60))
+        assertEquals(10.0, read(K.FUEL_CONSUMPTION)!!, 1e-9)
+        t += 11_000                                      // flow not repeated yet; speed keeps coming
+        apply(CanboxValue.SpeedKmh(120))
+        assertEquals(5.0, read(K.FUEL_CONSUMPTION)!!, 1e-9)
+        t += 14_000
+        assertEquals(5.0, read(K.FUEL_CONSUMPTION)!!, 1e-9)   // the hold outlives the key's 10 s
+    }
+
+    @Test
     fun odometerCompassAndVersion() {
         apply(CanboxValue.OdometerKm(123_456.7), CanboxValue.Compass(CompassReading(sector = 6, headingDeg = 266)), CanboxValue.Version("H1N4JPF20L-1"))
         assertEquals(123_456.7, read(K.ODOMETER)!!, 0.0)
