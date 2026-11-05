@@ -1239,6 +1239,7 @@ private fun tyresFace(): WidgetFace {
     val tyres = rememberTyres()
     val judged by Tyres.problems.collectAsState()
     val unit by Tyres.unit.collectAsState()
+    val units = LocalUnits.current
     if (tyres.isEmpty()) return idleFace(Icons.Filled.TireRepair, BuiltinKind.TYRES.label, stringResource(R.string.car_tyres_waiting))
     val order = listOf(TyrePos.FRONT_LEFT, TyrePos.FRONT_RIGHT, TyrePos.REAR_LEFT, TyrePos.REAR_RIGHT)
     val problems = judged.toList()
@@ -1247,7 +1248,7 @@ private fun tyresFace(): WidgetFace {
         tyres[pos]?.let { t ->
             val problem = judged[pos]
             val value = listOfNotNull(problem?.let { stringResource(it.labelRes) }, formatPressure(t.kPa, unit)).joinToString(" · ")
-            FaceRow(stringResource(pos.labelRes), value, alert = problem != null)
+            FaceRow(stringResource(pos.labelRes), value, alert = problem != null, sub = formatTyreTemp(t.celsius, units))
         }
     }
     val rows = wheels.filterNotNull()

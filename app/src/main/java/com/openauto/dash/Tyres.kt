@@ -227,6 +227,10 @@ internal fun tyreProblems(
     else tyreProblem(t, before[pos], tyreLowKpa(pos, car))?.let { pos to it }
 }.toMap()
 
+/** "24°C" or "75°F" in the driver's unit; null when the tyre's temperature is not known (nothing is shown). */
+internal fun formatTyreTemp(celsius: Int?, units: UnitSystem): String? =
+    celsius?.let { "${units.temp(it)}${units.tempUnit}" }
+
 /** "2.3 bar", "230 kPa", "33 psi". */
 internal fun formatPressure(kPa: Int, unit: PressureUnit): String = when (unit) {
     PressureUnit.BAR -> String.format(Locale.getDefault(), "%.1f bar", kPa / 100.0)

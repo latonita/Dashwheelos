@@ -114,4 +114,11 @@ class TyresTest {
         assertEquals(15, HeadUnitKeys.customNumber(368))
         assertNull(HeadUnitKeys.customNumber(298))
     }
+
+    @Test
+    fun tyreTemperatureInTheDriversUnit() {
+        assertEquals("24°C", formatTyreTemp(24, UnitSystem()))
+        assertEquals("75°F", formatTyreTemp(24, UnitSystem(fahrenheit = true)))
+        assertNull(formatTyreTemp(null, UnitSystem()))
+    }
 }

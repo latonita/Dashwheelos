@@ -190,6 +190,8 @@ internal data class FaceRow(
     val title: String,
     val detail: String,
     val alert: Boolean = false,
+    /** A small extra line under the detail (a tyre's temperature); null shows nothing. */
+    val sub: String? = null,
     /** Initials drawn in a round badge instead of the row's dot (contacts). */
     val badge: String? = null,
     val onClick: (() -> Unit)? = null,
