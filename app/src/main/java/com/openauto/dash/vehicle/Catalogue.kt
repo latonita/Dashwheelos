@@ -61,6 +61,8 @@ object K {
     val HEADLIGHTS = Key.State<Boolean>("headlights", Domain.BODY, DISPLAY)
     /** Which lights are on, as the driver would say it ([CarLight]); [HEADLIGHTS] is the one the appearance follows. */
     val LIGHTS = Key.State<List<CarLight>>("lights", Domain.BODY, DISPLAY)
+    /** The turn indicators and the hazards: which of them are lit right now. */
+    val INDICATORS = Key.State<Indicators>("indicators", Domain.BODY, DISPLAY)
     val HANDBRAKE = Key.State<Boolean>("handbrake", Domain.BODY, DISPLAY)
     /**
      * The instrument-panel dimmer, 0..100 %. A level the driver turns through many steps, not a state: as a State
@@ -88,6 +90,9 @@ object K {
     val all: List<Key<*>> = listOf(
         VEHICLE_SPEED, GPS_SPEED, SPEED, STEERING_ANGLE, RPM, THROTTLE, ENGINE_LOAD, COOLANT_TEMP, INTAKE_TEMP,
         ENGINE_RUNNING, GEAR, IGNITION, FUEL_FLOW, BATTERY_VOLTS, FUEL_LEVEL, FUEL_LITRES, RANGE, FUEL_CONSUMPTION, OUTSIDE_TEMP, FORECAST_TEMP,
-        AMBIENT_TEMP, DOORS, REVERSE, HEADLIGHTS, LIGHTS, HANDBRAKE, INSTRUMENT_DIMMER, DRIVER_BELT, CLIMATE, RADAR, TYRES, ODOMETER, TRIP_DISTANCE, CAR_HEADING, CANBOX_VERSION
+        AMBIENT_TEMP, DOORS, REVERSE, HEADLIGHTS, LIGHTS, INDICATORS, HANDBRAKE, INSTRUMENT_DIMMER, DRIVER_BELT, CLIMATE, RADAR, TYRES, ODOMETER, TRIP_DISTANCE, CAR_HEADING, CANBOX_VERSION
     )
 }
+
+/** Which turn signals are lit. [hazard] = the hazard switch, which flashes both sides. */
+data class Indicators(val left: Boolean, val right: Boolean, val hazard: Boolean = false)
