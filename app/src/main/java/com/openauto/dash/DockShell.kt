@@ -240,7 +240,9 @@ object DockShell {
     }
 
     private fun adbShell(context: Context, cmd: String): String {
-        val conn = adb ?: AdbInstaller.openShell(context, AdbInstaller.announcedPort(), ADB_TIMEOUT_MS).also { adb = it }
+        // The port adbd really answers on: a unit that announces none (service.adb.tcp.port empty) may listen on 5555.
+        val conn = adb ?: AdbInstaller.openShell(context, AdbInstaller.listeningPort() ?: AdbInstaller.announcedPort(), ADB_TIMEOUT_MS)
+            .also { adb = it }
         try {
             return conn.run(cmd)
         } catch (e: Exception) {
