@@ -170,4 +170,6 @@
     <string name="widgets_switch_bluetooth_detail">Liga ou desliga o Bluetooth</string>
     <string name="widgets_switch_mobile_data_detail">Liga ou desliga os dados do cartão SIM</string>
     <string name="widgets_switch_screen_off_detail">Desliga o ecrã como a tecla do aparelho</string>
+    <string name="map_tile_3d_buildings">Edifícios em 3D</string>
+    <string name="map_tile_3d_buildings_detail">Mostra os edifícios como blocos em relevo. Exige mais do chip gráfico.</string>
 </resources>

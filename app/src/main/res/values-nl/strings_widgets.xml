@@ -170,4 +170,6 @@
     <string name="widgets_switch_bluetooth_detail">Zet Bluetooth aan of uit</string>
     <string name="widgets_switch_mobile_data_detail">Zet de data van de simkaart aan of uit</string>
     <string name="widgets_switch_screen_off_detail">Zet het scherm uit zoals de knop van het toestel</string>
+    <string name="map_tile_3d_buildings">3D-gebouwen</string>
+    <string name="map_tile_3d_buildings_detail">Toont gebouwen als blokken. Belast de grafische chip meer.</string>
 </resources>

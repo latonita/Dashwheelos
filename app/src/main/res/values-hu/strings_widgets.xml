@@ -171,4 +171,6 @@
     <string name="widgets_switch_bluetooth_detail">Be- vagy kikapcsolja a Bluetootht</string>
     <string name="widgets_switch_mobile_data_detail">Be- vagy kikapcsolja a SIM-kártya adatforgalmát</string>
     <string name="widgets_switch_screen_off_detail">Kikapcsolja a képernyőt, mint a fejegység gombja</string>
+    <string name="map_tile_3d_buildings">3D épületek</string>
+    <string name="map_tile_3d_buildings_detail">Az épületek térbeli blokkként jelennek meg. Jobban terheli a grafikus chipet.</string>
 </resources>

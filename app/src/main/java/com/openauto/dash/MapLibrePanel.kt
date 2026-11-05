@@ -152,7 +152,7 @@ private val AccentMark: Color get() = DashColors.AccentInk
  * the lower part of the screen, and at most [WALLPAPER_FPS] frames a second.
  */
 @Composable
-fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
+fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false, buildings3d: Boolean = false) {
     // Typing a destination waits until the car has stopped (the drive lock).
     val moving = LocalDriveLock.current.moving
     val context = LocalContext.current
@@ -409,9 +409,22 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     MapServers.load(context)
     val servers by MapServers.current.collectAsState()
     val styleUrl = if (lightMap) servers.styleLight else servers.styleDark
+    // Read by the style callback below, which must see the latest choice.
+    val buildings3dNow = rememberUpdatedState(buildings3d)
+    // The option flipped: the layer comes or goes on the current style, no reload.
+    LaunchedEffect(mapRef, buildings3d, lightMap) {
+        val map = mapRef ?: return@LaunchedEffect
+        map.getStyle { style -> MapBuildings3d.apply(style, buildings3d, lightMap) }
+    }
     LaunchedEffect(mapRef, styleUrl) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
+            // The stock dark style is too low-contrast for a car screen; lift
+            // it, but only for the built-in default (a custom URL is the
+            // user's own look).
+            if (!lightMap && styleUrl == MapServers.DEFAULT_STYLE_DARK) MapDarkContrast.apply(style)
+            // setStyle built new layers: the 3D buildings go back on if wanted.
+            MapBuildings3d.apply(style, buildings3dNow.value, lightMap)
             // The route's source and layers belong to the style, and switching
             // between the day and night styles builds a new one — so the line
             // has to be made again each time or it disappears with the old

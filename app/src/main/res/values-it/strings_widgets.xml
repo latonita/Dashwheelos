@@ -170,4 +170,6 @@
     <string name="widgets_switch_bluetooth_detail">Attiva o disattiva il Bluetooth</string>
     <string name="widgets_switch_mobile_data_detail">Attiva o disattiva i dati della SIM</string>
     <string name="widgets_switch_screen_off_detail">Spegne lo schermo come il tasto dell\'unità</string>
+    <string name="map_tile_3d_buildings">Edifici 3D</string>
+    <string name="map_tile_3d_buildings_detail">Mostra gli edifici come blocchi in rilievo. Impegna di più il chip grafico.</string>
 </resources>

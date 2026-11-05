@@ -687,7 +687,10 @@ internal fun TileContent(
             } else Box(
                 modifier = Modifier.fillMaxSize().background(DashColors.Card)
             ) {
-                MapLibrePanel(modifier = Modifier.fillMaxSize())
+                val mapContext = LocalContext.current
+                MapTileOptions.load(mapContext)
+                val buildings3d by MapTileOptions.buildings3d.collectAsState()
+                MapLibrePanel(modifier = Modifier.fillMaxSize(), buildings3d = buildings3d)
                 // Google Maps / Waze next turn, floated over the MapLibre map.
                 val nav by NavDirections.state.collectAsState()
                 if (nav.active) {
