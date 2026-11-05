@@ -55,6 +55,9 @@ class DashApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReports.install(this)
+        // Before anything can open a socket: the free routing and Overpass
+        // servers no longer answer the TLS this Android speaks (ModernTls).
+        ModernTls.install()
         // Which head unit firmware this is, before anything asks its adapter.
         UnitPlatform.init(this)
     }

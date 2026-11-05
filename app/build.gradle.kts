@@ -221,6 +221,11 @@ dependencies {
     implementation("org.maplibre.navigation:navigation-ui-android:5.0.0-pre8")
     // HTTP + JSON for the free routing/geocoding requests.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // TLS 1.3 for an Android that has none (ModernTls.kt). The routing and
+    // Overpass servers refuse TLS 1.2 outright, so without this the units on
+    // Android 8.1 can draw the map but never get a route. OkHttp picks the
+    // provider up by itself once it is registered.
+    implementation("org.conscrypt:conscrypt-android:2.5.2")
     implementation("com.google.code.gson:gson:2.11.0")
     // Words read off a navigation app's tile (TileText): the Latin recognizer Play services ship.
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
