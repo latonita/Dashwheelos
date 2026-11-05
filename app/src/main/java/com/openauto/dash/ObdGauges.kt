@@ -54,6 +54,18 @@ internal fun obdPollPlan(wanted: Set<Key<*>>, tick: Int): List<Pid> {
 }
 
 /**
+ * The fuel flow for the record after a poll. The flow is asked only every other poll ([obdPollPlan]), so on the
+ * polls that skip it the last value is carried (a null there would withdraw the key on every other poll, see
+ * [ObdGaugePublisher.publish]); it is null only when nobody wants the key, or after the engine stopped.
+ * [polled]: this poll asked for it; [flow]: what it answered (null: no answer).
+ */
+internal fun carriedFuelFlow(polled: Boolean, wanted: Set<Key<*>>, flow: Double?, previous: Double?): Double? = when {
+    polled -> flow ?: previous
+    K.FUEL_FLOW in wanted -> previous
+    else -> null
+}
+
+/**
  * The adapter as a provider of the gauge keys. A key is put only after the
  * adapter has answered that PID since the link came up, and only when it is
  * read again (a value that is not asked for any more ages out by its key's

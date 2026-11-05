@@ -926,7 +926,7 @@ object ObdBluetoothManager {
             fuelLevelPct = fuel ?: d.fuelLevelPct,
             voltage = volt ?: d.voltage,
             voltageFromEcu = if (volt != null) ecuVolt != null else d.voltageFromEcu,
-            fuelFlowLh = if (wantFlow) flow ?: d.fuelFlowLh else null
+            fuelFlowLh = carriedFuelFlow(wantFlow, Vehicle.bus.wanted.value, flow, d.fuelFlowLh)
         )
         val fresh = buildSet {
             if (speed != null) add(Pid.SPEED)

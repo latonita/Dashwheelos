@@ -146,6 +146,29 @@ class ObdGaugesTest {
         assertNull(bus.now(K.FUEL_FLOW))
     }
 
+    @Test
+    fun carriedFlowIsKeptOnPollsThatSkipIt() {
+        val wanted: Set<Key<*>> = setOf(K.FUEL_FLOW)
+        assertEquals(6.5, carriedFuelFlow(false, wanted, null, 6.5)!!, 0.0)   // not polled: carry
+        assertEquals(7.0, carriedFuelFlow(true, wanted, 7.0, 6.5)!!, 0.0)     // polled, answered
+        assertEquals(6.5, carriedFuelFlow(true, wanted, null, 6.5)!!, 0.0)    // polled, no answer: last (ages out by ttl)
+        assertNull(carriedFuelFlow(false, emptySet(), null, 6.5))              // nobody wants it
+        assertNull(carriedFuelFlow(true, wanted, null, null))
+    }
+
+    @Test
+    fun theFuelFlowSurvivesTheAlternatePollsThatSkipIt() {
+        var rec = ObdData()
+        for (tick in 0..7) {
+            val polled = Pid.FUEL_FLOW in plan(everything, tick)
+            val answered = if (polled) 6.5 else null
+            rec = rec.copy(speedKmh = 50, fuelFlowLh = carriedFuelFlow(polled, everything, answered, rec.fuelFlowLh))
+            val fresh = buildSet { add(Pid.SPEED); if (answered != null) add(Pid.FUEL_FLOW) }
+            out.publish(rec, fresh)
+            if (tick >= 1) assertEquals("tick $tick", 6.5, bus.now(K.FUEL_FLOW)!!, 0.0)
+        }
+    }
+
     // --- Volts: the unit's against the adapter's, by plain resolution ---------------------
 
     private val mcu = Source("qf.mcu", SourceKind.MCU, "Unit MCU")
