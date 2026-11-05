@@ -175,4 +175,6 @@
     <string name="widgets_switch_bluetooth_detail">Įjungia arba išjungia Bluetooth</string>
     <string name="widgets_switch_mobile_data_detail">Įjungia arba išjungia SIM kortelės duomenis</string>
     <string name="widgets_switch_screen_off_detail">Išjungia ekraną kaip įrenginio mygtukas</string>
+    <string name="map_tile_3d_buildings">3D pastatai</string>
+    <string name="map_tile_3d_buildings_detail">Pastatai rodomi kaip erdviniai blokai. Labiau apkrauna vaizdo lustą.</string>
 </resources>

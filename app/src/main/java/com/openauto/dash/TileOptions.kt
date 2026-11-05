@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apartment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
@@ -30,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -124,6 +127,7 @@ internal fun TilePanel(
                 SquareButton(Icons.Filled.Close, stringResource(R.string.dash_close), onClick = onClose)
             }
             if (settings != null) TileSettingsButton(settings)
+            if ((item as? DashboardItem.BuiltinWidget)?.kind == BuiltinKind.NAVMAP) MapTileToggles()
             if (upright) {
                 // Along the bottom: the shelf takes the width, the rest stands beside it.
                 Row(
@@ -341,4 +345,15 @@ private fun PageCell(page: Int, here: Boolean, col: Int, row: Int, cell: Dp = PA
             Box(Modifier.size(5.dp).clip(RoundedCornerShape(50)).background(DashColors.Muted.copy(alpha = 0.6f)))
         }
     }
+}
+
+/** The map tile's own switches, in its panel: they act on the tile at once. */
+@Composable
+private fun MapTileToggles() {
+    val context = LocalContext.current
+    MapTileOptions.load(context)
+    val on by MapTileOptions.buildings3d.collectAsState()
+    SettingsToggle(
+        Icons.Filled.Apartment, stringResource(R.string.map_tile_3d_buildings), stringResource(R.string.map_tile_3d_buildings_detail), on
+    ) { MapTileOptions.setBuildings3d(context, it) }
 }
