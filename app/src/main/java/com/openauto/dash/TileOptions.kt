@@ -112,11 +112,15 @@ internal fun TilePanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     /** The Dashboard bar's own actions, shown instead of the page picker (the bar is the same on every page). */
-    barActions: (@Composable () -> Unit)? = null
+    barActions: (@Composable () -> Unit)? = null,
+    /** Replaces this tile with a changed copy of itself: a Custom gauge's own settings are saved through it. */
+    onItemChange: (DashboardItem) -> Unit = {}
 ) {
     val upright = side == PanelSide.TOP || side == PanelSide.BOTTOM
     // The tile's own settings, the same page Settings opens (TileSettings.kt).
-    val settings = (item as? DashboardItem.BuiltinWidget)?.let { tileSettings(it.kind) }
+    val settings = (item as? DashboardItem.BuiltinWidget)?.let {
+        if (it.kind == BuiltinKind.CUSTOM_GAUGE) gaugeSettings(it, onItemChange) else tileSettings(it.kind)
+    }
     SolidCard(modifier = modifier.keepClearOfWindows()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

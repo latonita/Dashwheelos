@@ -263,4 +263,5 @@ internal fun kindIcon(kind: BuiltinKind): ImageVector = when (kind) {
     BuiltinKind.MY_READINGS -> Icons.Filled.Calculate
     BuiltinKind.DRIVE_HISTORY -> Icons.Filled.History
     BuiltinKind.NOW -> Icons.Filled.Layers
+    BuiltinKind.CUSTOM_GAUGE -> Icons.Filled.Speed
 }

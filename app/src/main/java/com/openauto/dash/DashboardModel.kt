@@ -106,7 +106,9 @@ enum class BuiltinKind(
     // The last drives the drive log kept, with this week's total (DriveHistoryTile.kt).
     DRIVE_HISTORY(R.string.widgets_history, WidgetCategory.DRIVING, R.string.widgets_history_blurb, 4, 3),
     // The one thing that matters right now, picked from the other feeds (NowCard.kt).
-    NOW(R.string.widgets_now, WidgetCategory.DRIVING, R.string.widgets_now_blurb, 5, 2)
+    NOW(R.string.widgets_now, WidgetCategory.DRIVING, R.string.widgets_now_blurb, 5, 2),
+    // One vehicle-bus signal of the driver's choice, drawn as a dial, a bar or a number; any number of copies (CustomGauge.kt).
+    CUSTOM_GAUGE(R.string.gauge_kind, WidgetCategory.VEHICLE, R.string.gauge_kind_blurb, 3, 3)
 }
 
 /**
@@ -169,13 +171,17 @@ sealed interface DashboardItem {
         override val zoom: Float = 1f
     ) : DashboardItem
 
-    /** [design] is this tile's own look (see WidgetDesigns.kt); two clocks may differ. */
+    /**
+     * [design] is this tile's own look (see WidgetDesigns.kt); two clocks may differ. [opts] is the tile's own
+     * settings as one string, for the kinds that have any (a [BuiltinKind.CUSTOM_GAUGE]'s [GaugeConfig]); blank otherwise.
+     */
     data class BuiltinWidget(
         val kind: BuiltinKind,
         override val x: Int = 0, override val y: Int = 0,
         override val w: Int = 5, override val h: Int = 3,
         val design: WidgetDesign = WidgetDesign.STANDARD,
-        override val zoom: Float = 1f
+        override val zoom: Float = 1f,
+        val opts: String = ""
     ) : DashboardItem
 
     data class SystemWidget(
@@ -225,7 +231,7 @@ fun BuiltinKind.minSize(): Pair<Int, Int> = when (this) {
     // One card of words: a sentence needs the width.
     BuiltinKind.NOW -> 3 to 2
     // A gauge or a picture with a few lines under it.
-    BuiltinKind.TELEMETRY, BuiltinKind.OBD_ALL, BuiltinKind.OBD_DTC, BuiltinKind.RANGE, BuiltinKind.DOORS, BuiltinKind.COMPASS,
+    BuiltinKind.TELEMETRY, BuiltinKind.OBD_ALL, BuiltinKind.OBD_DTC, BuiltinKind.RANGE, BuiltinKind.DOORS, BuiltinKind.COMPASS, BuiltinKind.CUSTOM_GAUGE,
     BuiltinKind.GFORCE, BuiltinKind.NAVIGATION, BuiltinKind.MEDIA, BuiltinKind.FILTER_CARE, BuiltinKind.MY_CAR, BuiltinKind.ECO_DRIVE,
     BuiltinKind.SERVICE, BuiltinKind.CAR_STATUS, BuiltinKind.TYRES, BuiltinKind.HEAD_UNIT -> 2 to 2
     // One reading and a caption.
@@ -393,7 +399,8 @@ object DashboardStore {
      *  1: `{"v":1,"pages":[[tile...], ...]}`. Before v1 the value was the bare
      *     pages array, which is still accepted. A built-in tile may carry an
      *     optional `"d"` (its WidgetDesign name); absent means the standard
-     *     design, so older builds simply ignore it.
+     *     design, so older builds simply ignore it. It may also carry `"o"`, the
+     *     tile's own settings (a Custom gauge's signal and style).
      */
     private const val SCHEMA_VERSION = 1
 
@@ -654,7 +661,9 @@ object DashboardStore {
     val placedKinds: StateFlow<Set<BuiltinKind>> = _placedKinds
 
     private fun notePlaced(pages: List<List<DashboardItem>>) {
-        _placedKinds.value = pages.flatten().filterIsInstance<DashboardItem.BuiltinWidget>().map { it.kind }.toSet()
+        // A Custom gauge can be added any number of times: it is never "already there".
+        _placedKinds.value = pages.flatten().filterIsInstance<DashboardItem.BuiltinWidget>().map { it.kind }
+            .filter { it != BuiltinKind.CUSTOM_GAUGE }.toSet()
     }
 
     /**
@@ -905,7 +914,10 @@ object DashboardStore {
             is DashboardItem.LaunchBar ->
                 JSONObject().put("t", "bar").put("pkgs", JSONArray(packages))
             is DashboardItem.BuiltinWidget -> JSONObject().put("t", "builtin").put("k", kind.name)
-                .apply { if (design != WidgetDesign.STANDARD) put("d", design.name) }
+                .apply {
+                    if (design != WidgetDesign.STANDARD) put("d", design.name)
+                    if (opts.isNotEmpty()) put("o", opts)
+                }
             is DashboardItem.SystemWidget -> JSONObject().put("t", "widget").put("id", appWidgetId)
             is DashboardItem.AppWindow -> JSONObject().put("t", "appwin").put("pkg", packageName)
                 .apply { if (inside) put("in", true) }
@@ -959,7 +971,7 @@ object DashboardStore {
             // Default span comes from the kind (a clock is 3x2, a map 5x3), so a
             // legacy tile without coordinates is re-flowed at its proper size.
             "builtin" -> runCatching { BuiltinKind.valueOf(optString("k")) }.getOrNull()
-                ?.let { place(DashboardItem.BuiltinWidget(it, w = it.defaultW, h = it.defaultH, design = WidgetDesign.fromName(optString("d")))) }
+                ?.let { place(DashboardItem.BuiltinWidget(it, w = it.defaultW, h = it.defaultH, design = WidgetDesign.fromName(optString("d")), opts = optString("o"))) }
             "widget" -> optInt("id", -1).takeIf { it != -1 }
                 ?.let { place(DashboardItem.SystemWidget(it)) }
             "appwin" -> optString("pkg").takeIf { it.isNotBlank() }

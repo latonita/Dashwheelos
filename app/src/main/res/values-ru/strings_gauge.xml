@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Custom gauge tile (CustomGauge.kt, CustomGaugeModel.kt) -->
+    <string name="gauge_kind">Свой датчик</string>
+    <string name="gauge_kind_blurb">Любой сигнал автомобиля: стрелка, полоса или число</string>
+    <string name="gauge_pick_signal">Сначала выберите сигнал</string>
+    <string name="gauge_pick_hint">Выберите сигнал в настройках плитки</string>
+    <string name="gauge_options">Сигнал, вид и шкала</string>
+    <string name="gauge_sheet_title">Свой датчик</string>
+    <string name="gauge_style">Вид</string>
+    <string name="gauge_style_dial">Стрелка</string>
+    <string name="gauge_style_bar_h">Полоса</string>
+    <string name="gauge_style_bar_v">Столбик</string>
+    <string name="gauge_style_number">Число</string>
+    <string name="gauge_range">Шкала (%1$s)</string>
+    <string name="gauge_min">От</string>
+    <string name="gauge_max">До</string>
+    <string name="gauge_range_default">Пусто = обычная шкала для сигнала</string>
+    <string name="gauge_signal">Сигнал</string>
+    <string name="gauge_no_data">нет данных</string>
+    <string name="gauge_unknown_signal">Неизвестный сигнал</string>
+    <string name="gauge_save">Готово</string>
+    <string name="gauge_key_vehicle_speed">Скорость автомобиля</string>
+    <string name="gauge_key_gps_speed">Скорость по GPS</string>
+    <string name="gauge_key_speed">Скорость</string>
+    <string name="gauge_key_steering_angle">Угол руля</string>
+    <string name="gauge_key_car_heading">Курс автомобиля</string>
+    <string name="gauge_key_rpm">Обороты двигателя</string>
+    <string name="gauge_key_throttle">Дроссель</string>
+    <string name="gauge_key_engine_load">Нагрузка двигателя</string>
+    <string name="gauge_key_coolant_temp">Температура ОЖ</string>
+    <string name="gauge_key_intake_temp">Температура впуска</string>
+    <string name="gauge_key_fuel_flow">Расход топлива в час</string>
+    <string name="gauge_key_battery_volts">Напряжение батареи</string>
+    <string name="gauge_key_fuel_level">Уровень топлива</string>
+    <string name="gauge_key_fuel_litres">Топливо в баке</string>
+    <string name="gauge_key_range">Запас хода</string>
+    <string name="gauge_key_fuel_consumption">Расход топлива</string>
+    <string name="gauge_key_outside_temp">Температура снаружи</string>
+    <string name="gauge_key_forecast_temp">Температура по прогнозу</string>
+    <string name="gauge_key_ambient_temp">Температура воздуха</string>
+    <string name="gauge_key_instrument_dimmer">Подсветка приборов</string>
+    <string name="gauge_key_odometer">Одометр</string>
+    <string name="gauge_key_trip_distance">Пробег поездки</string>
+    <string name="gauge_domain_motion">Движение</string>
+    <string name="gauge_domain_powertrain">Двигатель и трансмиссия</string>
+    <string name="gauge_domain_energy">Топливо и батарея</string>
+    <string name="gauge_domain_trip">Поездка</string>
+    <string name="gauge_domain_environment">Температура вне авто</string>
+    <string name="gauge_domain_body">Кузов</string>
+    <string name="gauge_domain_tyres">Шины</string>
+    <string name="gauge_domain_climate">Климат</string>
+    <string name="gauge_domain_driver_aids">Помощь водителю</string>
+    <string name="gauge_domain_identity">Данные авто</string>
+</resources>

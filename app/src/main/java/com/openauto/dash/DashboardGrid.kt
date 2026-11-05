@@ -777,6 +777,7 @@ internal fun TileContent(
             BuiltinKind.FUEL_PRICES -> FuelPricesCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.CAR_STATUS -> CarStatusCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.TYRES -> TyresCard(modifier = Modifier.fillMaxSize(), editing = editing)
+            BuiltinKind.CUSTOM_GAUGE -> CustomGaugeCard(GaugeConfig.decode(item.opts), Modifier.fillMaxSize())
         } }
 
         is DashboardItem.SystemWidget -> if (editing) {

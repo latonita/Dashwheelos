@@ -364,7 +364,7 @@ class DashboardStoreTest {
         // Every redrawn widget gets at least two designs made for it; live views get none,
         // and the dashboard bar, all buttons, has no designs at all.
         // The speed keeps one: the road sign went, a number in a red ring reads as the limit.
-        BuiltinKind.entries.filter { it !in framed && it != BuiltinKind.DASH_BAR }.forEach { kind ->
+        BuiltinKind.entries.filter { it !in framed && it != BuiltinKind.DASH_BAR && it != BuiltinKind.CUSTOM_GAUGE }.forEach { kind ->
             val least = if (kind == BuiltinKind.SPEED_HUD) 1 else 2
             assertTrue("$kind", WidgetDesign.entries.count { it.isSignature && it.appliesTo(kind) } >= least)
         }

@@ -302,6 +302,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
         }
     }
     var launchBarEditor by ui::launchBarEditor
+    var gaugeEditor by ui::gaugeEditor
     // Only the driver's dashboards are swiped (CanvasTabs.tabsFor): Home always,
     // the rest of the cross as they are added. Pages 0-2 sideways, the middle one
     // also up/down (see DashboardStore.COLUMN); the launcher starts on Home.
@@ -1781,7 +1782,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
                         } ?: tile.describe(),
                         page = page,
                         side = side,
-                        designs = widget?.takeIf { it.kind != BuiltinKind.DASH_BAR }?.let {
+                        designs = widget?.takeIf { it.kind != BuiltinKind.DASH_BAR && it.kind != BuiltinKind.CUSTOM_GAUGE }?.let {
                             { shelfModifier ->
                                 DesignShelf(
                                     kind = widget.kind,
@@ -1825,6 +1826,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
                         } else null,
                         onRemove = { tileOptions = null; removeAt(page, index) },
                         onClose = { tileOptions = null },
+                        onItemChange = { updateItem(page, index, it) },
                         modifier = placing
                     )
                 }
@@ -1882,7 +1884,11 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
                     },
                     onPickBuiltin = { kind ->
                         showAddSheet = false
-                        if (addTargetPage >= 0) addItem(addTargetPage, DashboardItem.BuiltinWidget(kind, w = kind.defaultW, h = kind.defaultH))
+                        if (addTargetPage >= 0) {
+                            val index = addItemAt(addTargetPage, DashboardItem.BuiltinWidget(kind, w = kind.defaultW, h = kind.defaultH))
+                            // A new Custom gauge has no signal yet: choose it right away.
+                            if (index >= 0 && kind == BuiltinKind.CUSTOM_GAUGE) gaugeEditor = addTargetPage to index
+                        }
                     },
                     onPickLaunchBar = {
                         showAddSheet = false
@@ -2118,6 +2124,19 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
                     launchBarEditor = null
                 },
                 onDismiss = { launchBarEditor = null }
+            )
+        }
+    }
+
+    gaugeEditor?.let { (page, index) ->
+        val gauge = pages.getOrNull(page)?.getOrNull(index) as? DashboardItem.BuiltinWidget
+        if (gauge == null || gauge.kind != BuiltinKind.CUSTOM_GAUGE) {
+            LaunchedEffect(Unit) { gaugeEditor = null }
+        } else {
+            CustomGaugeDialog(
+                initial = GaugeConfig.decode(gauge.opts),
+                onSave = { updateItem(page, index, gauge.copy(opts = it.encode())); gaugeEditor = null },
+                onDismiss = { gaugeEditor = null }
             )
         }
     }
