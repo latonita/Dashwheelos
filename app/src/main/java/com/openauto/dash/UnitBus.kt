@@ -33,6 +33,8 @@ object UnitBus {
      * key's 3 s, and the volts [VOLTS_HOLD_MS] instead of 60 s; the temperature keeps the key's 2 h.
      */
     const val SAY_HOLD_MS = 10_000L
+    /** The XYAuto box re-sends an unchanged fuel flow only within its 11.5 s keep-alive sweep; its own 0xFFFF withdraws it sooner. */
+    const val FLOW_HOLD_MS = 15_000L
     const val VOLTS_HOLD_MS = 10 * 60_000L
     /** Like the car app's: a steering angle is said when it changes, and the wheel can stay put. */
     const val STEERING_HOLD_MS = 60 * 60_000L

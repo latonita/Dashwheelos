@@ -94,7 +94,7 @@ object CarBox {
     private val bodyLive = SourceLiveness(
         BODY_SILENT_MS, scope, onBack = {}, onSilent = {
             synchronized(stated) { stated.clear() }
-            for (key in listOf(K.HEADLIGHTS, K.LIGHTS, K.DRIVER_BELT, K.HANDBRAKE)) busPublisher.put(key, null)
+            for (key in listOf(K.HEADLIGHTS, K.LIGHTS, K.INDICATORS, K.DRIVER_BELT, K.HANDBRAKE)) busPublisher.put(key, null)
         }
     )
 
@@ -246,6 +246,7 @@ object CarBox {
         // The lights count as on from the side lights up: the unit's own headlight signal is the illumination wire.
         putState(K.HEADLIGHTS, b.highBeam || b.dippedBeam || b.sidelights)
         putState(K.LIGHTS, lightsOn(b))
+        putState(K.INDICATORS, com.openauto.dash.vehicle.Indicators(b.turnLeft, b.turnRight, b.hazard))
         putState(K.DRIVER_BELT, b.driverBeltUnfastened)
         putState(K.HANDBRAKE, b.handbrake)
         busPublisher.put(K.FUEL_CONSUMPTION, b.instantConsumption?.toDouble(), ttlMs = FRESH_MS)
