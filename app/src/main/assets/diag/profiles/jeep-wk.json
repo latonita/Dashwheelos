@@ -1,0 +1,384 @@
+{
+ "id": "jeep-wk",
+ "label": "Jeep WK (FCA KWP2000 on CAN)",
+ "modules": [
+  {
+   "id": "PCM",
+   "name": "Engine",
+   "tx": "0x7E0",
+   "rx": "0x7E8",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "SENSITIVE",
+   "probeOnly": false
+  },
+  {
+   "id": "TCM",
+   "name": "Transmission",
+   "tx": "0x7E1",
+   "rx": "0x7E9",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "ABS",
+   "name": "Anti-lock brakes",
+   "tx": "0x784",
+   "rx": "0x785",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "ESM",
+   "name": "Electronic shifter",
+   "tx": "0x788",
+   "rx": "0x789",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "FDCM",
+   "name": "Final drive / AWD",
+   "tx": "0x7B6",
+   "rx": "0x7B7",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "FCMCGW",
+   "name": "Front control module / gateway",
+   "tx": "0x620",
+   "rx": "0x504",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "WCM",
+   "name": "Wireless control / immobilizer",
+   "tx": "0x600",
+   "rx": "0x500",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "SENSITIVE",
+   "probeOnly": false
+  },
+  {
+   "id": "CCN",
+   "name": "Instrument cluster",
+   "tx": "0x6A0",
+   "rx": "0x514",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "SCM",
+   "name": "Steering column",
+   "tx": "0x6A8",
+   "rx": "0x515",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "RADIO",
+   "name": "Radio",
+   "tx": "0x6B0",
+   "rx": "0x516",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "ORC",
+   "name": "Airbags",
+   "tx": "0x6E0",
+   "rx": "0x51C",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "SENSITIVE",
+   "probeOnly": false
+  },
+  {
+   "id": "EOM",
+   "name": "Overhead console",
+   "tx": "0x6F0",
+   "rx": "0x51E",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": false
+  },
+  {
+   "id": "AHBM",
+   "name": "Headlamp beam module",
+   "tx": "0x710",
+   "rx": "0x522",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "AMP",
+   "name": "Amplifier",
+   "tx": "0x7F0",
+   "rx": "0x53E",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "DDM",
+   "name": "Driver door module",
+   "tx": "0x640",
+   "rx": "0x508",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "HFM",
+   "name": "Hands-free module",
+   "tx": "0x7F8",
+   "rx": "0x53F",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "HSM",
+   "name": "Heated seat module",
+   "tx": "0x6D8",
+   "rx": "0x51B",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "HVAC",
+   "name": "Climate control",
+   "tx": "0x688",
+   "rx": "0x511",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "ITM",
+   "name": "Integrated telematics module",
+   "tx": "0x670",
+   "rx": "0x50E",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "LRSM",
+   "name": "Left rear seat module",
+   "tx": "0x708",
+   "rx": "0x521",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "MSMD",
+   "name": "Memory seat module",
+   "tx": "0x660",
+   "rx": "0x50C",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "OCM",
+   "name": "Occupant classification module",
+   "tx": "0x6E8",
+   "rx": "0x51D",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "PDM",
+   "name": "Passenger door module",
+   "tx": "0x650",
+   "rx": "0x50A",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "PTS",
+   "name": "Parking assist",
+   "tx": "0x698",
+   "rx": "0x513",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "SDAR",
+   "name": "Satellite radio",
+   "tx": "0x7D8",
+   "rx": "0x53B",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "SUNR",
+   "name": "Sunroof",
+   "tx": "0x638",
+   "rx": "0x507",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  },
+  {
+   "id": "VES",
+   "name": "Rear entertainment",
+   "tx": "0x7D0",
+   "rx": "0x53A",
+   "protocol": "KWP_CAN",
+   "readRequest": "1800FF00",
+   "clearSteps": [
+    "1092",
+    "14FF00"
+   ],
+   "clearRisk": "NORMAL",
+   "probeOnly": true
+  }
+ ]
+}
