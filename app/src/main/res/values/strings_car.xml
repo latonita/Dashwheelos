@@ -240,6 +240,9 @@
     <string name="car_kind_tyres">Tyres</string>
     <string name="car_kind_tyres_blurb">Pressure and temperature of each tyre, from the tyre sensors</string>
     <string name="car_tyres_title">TYRES</string>
+    <string name="car_tyres_swapped">swapped</string>
+    <string name="car_tyres_remap_title">%1$s data is really from:</string>
+    <string name="car_tyres_remap_reset">Reset wheel order</string>
     <string name="car_tyres_waiting">Waiting for the tyre sensors</string>
     <string name="car_tyres_spare">Spare</string>
     <string name="car_tyres_leak">Leak</string>

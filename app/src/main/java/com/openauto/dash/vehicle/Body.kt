@@ -7,7 +7,9 @@ import androidx.compose.runtime.remember
 import com.openauto.dash.McuReader
 import com.openauto.dash.Tyre
 import com.openauto.dash.TyrePos
+import com.openauto.dash.WheelMaps
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -51,10 +53,23 @@ fun ignitionFlow(): Flow<Boolean?> = Vehicle.bus.value(K.IGNITION)
 @Composable
 fun rememberDoors(): McuReader.DoorState? = rememberVehicle(K.DOORS)
 
-/** The tyres, position by position; empty until a sensor is heard. */
+/**
+ * The tyres, position by position, as the driver's wheel map for the source that provides them says
+ * ([WheelMaps]); empty until a sensor is heard. Raw `K.TYRES` readers bypass the map.
+ */
 @Composable
-fun rememberTyres(): Map<TyrePos, Tyre> = rememberVehicle(K.TYRES) ?: emptyMap()
+fun rememberTyres(): Map<TyrePos, Tyre> {
+    val flow = remember { tyresFlow() }
+    val tyres by flow.collectAsState(remember { tyresNow() })
+    return tyres
+}
 
-fun tyresNow(): Map<TyrePos, Tyre> = Vehicle.bus.now(K.TYRES) ?: emptyMap()
+fun tyresNow(): Map<TyrePos, Tyre> {
+    val s = Vehicle.bus.sample(K.TYRES).value ?: return emptyMap()
+    return WheelMaps.apply(WheelMaps.maps.value, s.source.id, s.value)
+}
 
-fun tyresFlow(): Flow<Map<TyrePos, Tyre>> = Vehicle.bus.value(K.TYRES).map { it ?: emptyMap() }
+fun tyresFlow(): Flow<Map<TyrePos, Tyre>> =
+    combine(Vehicle.bus.sample(K.TYRES), WheelMaps.maps) { s, maps ->
+        if (s == null) emptyMap() else WheelMaps.apply(maps, s.source.id, s.value)
+    }.distinctUntilChanged()

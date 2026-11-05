@@ -31,6 +31,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.collectAsState
+import com.openauto.dash.vehicle.Vehicle
+import com.openauto.dash.vehicle.K
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -190,6 +194,16 @@ private fun ColumnScope.Controls(
     ) {
         RestartButton { EmbeddedApp.restartInTile(item.packageName) }
     }
+    // A swapped wheel order is undone here too, not only from the wheel's own menu.
+    if (item is DashboardItem.BuiltinWidget && item.kind == BuiltinKind.TYRES) {
+        val context = LocalContext.current
+        val sample by Vehicle.bus.sample(K.TYRES).collectAsState()
+        val maps by WheelMaps.maps.collectAsState()
+        val source = sample?.source?.id
+        if (source != null && !WheelMaps.of(maps, source).isIdentity) {
+            RestartButton(stringResource(R.string.car_tyres_remap_reset)) { WheelMaps.reset(context, source) }
+        }
+    }
     if (barActions != null) {
         barActions()
         RemoveButton(onRemove)
@@ -245,7 +259,7 @@ private fun SquareButton(icon: ImageVector, label: String, enabled: Boolean = tr
 }
 
 @Composable
-private fun RestartButton(onRestart: () -> Unit) {
+private fun RestartButton(label: String = stringResource(R.string.dash_tile_restart_app), onRestart: () -> Unit) {
     val tap = rememberTapFeedback()
     Row(
         modifier = Modifier
@@ -258,7 +272,7 @@ private fun RestartButton(onRestart: () -> Unit) {
     ) {
         Icon(Icons.Filled.Refresh, contentDescription = null, tint = DashColors.TextPrimary, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.dash_tile_restart_app), color = DashColors.TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(label, color = DashColors.TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
