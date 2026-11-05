@@ -41,8 +41,8 @@ object PrivApp {
      * manifest is added here too. One line, no single quotes: it is echoed
      * inside single quotes by the install scripts.
      */
-    internal const val PRIVAPP_XML =
-        "<permissions><privapp-permissions package=\"com.openauto.dash\">" +
+    internal val PRIVAPP_XML =
+        "<permissions><privapp-permissions package=\"${BuildConfig.APPLICATION_ID}\">" +
             "<permission name=\"android.permission.BIND_APPWIDGET\"/>" +
             "<permission name=\"android.permission.WRITE_SECURE_SETTINGS\"/>" +
             "<permission name=\"android.permission.READ_LOGS\"/>" +
@@ -152,6 +152,6 @@ object PrivApp {
         }
     }
 
-    private const val APP_PACKAGE = "com.openauto.dash"
+    private val APP_PACKAGE = BuildConfig.APPLICATION_ID
     private const val TAG = "PrivApp"
 }
