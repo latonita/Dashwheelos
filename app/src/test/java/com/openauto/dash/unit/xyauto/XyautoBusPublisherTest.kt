@@ -83,6 +83,45 @@ class XyautoBusPublisherTest {
 
     // --- The states ------------------------------------------------------------------------------------------
 
+    // --- The ignition: the canbox first, the vendor broadcast as the fallback ----------------------------------
+
+    private val power = bus.register(Source("power", SourceKind.VEHICLE_APP, "Unit power"))
+
+    @Test
+    fun theCanboxAccOutranksTheBroadcastAndTheBroadcastTakesOverWhenTheBoxIsGone() {
+        power.put(K.IGNITION, false, com.openauto.dash.vehicle.Quality.DEGRADED)    // as CarPower does on a unit with a canbox
+        assertEquals(false, read(K.IGNITION))
+        assertEquals("power", bus.sample(K.IGNITION).value!!.source.id)
+
+        t = 10; apply(CanboxValue.Acc(true))
+        assertEquals(true, read(K.IGNITION))
+        assertEquals("unit.bus", bus.sample(K.IGNITION).value!!.source.id)
+
+        // The broadcast speaking later does not win back (the newer-wins tie is broken by quality).
+        t = 20; power.put(K.IGNITION, false, com.openauto.dash.vehicle.Quality.DEGRADED)
+        assertEquals(true, read(K.IGNITION))
+
+        // The box off: the source goes down, what it said is withdrawn, the broadcast stands.
+        out.up(false)
+        assertEquals(false, read(K.IGNITION))
+        assertEquals("power", bus.sample(K.IGNITION).value!!.source.id)
+    }
+
+    @Test
+    fun theCanboxSaysAccOffAndOnAgain() {
+        power.put(K.IGNITION, true, com.openauto.dash.vehicle.Quality.DEGRADED)
+        apply(CanboxValue.Acc(false))
+        assertEquals(false, read(K.IGNITION))
+        apply(CanboxValue.Acc(true))
+        assertEquals(true, read(K.IGNITION))
+    }
+
+    @Test
+    fun withNoCanboxTheBroadcastIsTheIgnition() {
+        power.put(K.IGNITION, true, com.openauto.dash.vehicle.Quality.DEGRADED)
+        assertEquals(true, read(K.IGNITION))
+    }
+
     @Test
     fun theBodyStates() {
         apply(

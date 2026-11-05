@@ -39,6 +39,8 @@ interface UnitAdapter {
     val catalogue: SignalCatalogue
     /** The firmware's own apps this adapter talks to: the compatibility report lists which are there. */
     val vendorPackages: Set<String>
+    /** True where the vehicle bus source (a canbox) also says the ignition, and so outranks [ignition]'s broadcasts while it is up. */
+    val ignitionOnBus: Boolean get() = false
 }
 
 enum class IgnitionEvent { ON, OFF, SLEEP_SOON, WAKE }

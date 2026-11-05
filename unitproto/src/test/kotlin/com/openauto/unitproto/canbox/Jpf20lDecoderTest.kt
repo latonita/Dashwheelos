@@ -530,7 +530,7 @@ class Jpf20lDecoderTest {
         // Doors, lights, dimmer and the lever come through unchanged...
         assertEquals(listOf(CanboxValue.Gear(GearPosition.DRIVE)), decode(HiworldJpf2Cmd.DRIVE, 0x00, 0x04, 0x0A, 0x8D))
         assertEquals(
-            listOf(CanboxValue.Lights(true), CanboxValue.Dimmer(51)),
+            listOf(CanboxValue.Lights(true), CanboxValue.Dimmer(51), CanboxValue.Acc(true), CanboxValue.IgnBit(false)),
             decode(HiworldJpf2Cmd.STATE, 0x07, 0x00, 0x00, 0x33)
         )
         // ...but 0x32's revs and 0x72's reverse bit are not: a heartbeat withdrawal of

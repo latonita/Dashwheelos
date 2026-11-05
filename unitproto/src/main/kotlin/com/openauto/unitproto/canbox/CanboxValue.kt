@@ -28,6 +28,10 @@ sealed interface CanboxValue {
     data class Doors(val doors: DoorBits) : CanboxValue
     data class Tyre(val reading: TyreReading) : CanboxValue
 
+    /** The box's ACC input (stock JPF2 `0x72` bit 0): the key is in ACC or on. */
+    data class Acc(val on: Boolean) : CanboxValue
+    /** Stock JPF2 `0x72` bit 4, the "raw ignition bit": decoded, meaning unproven, not published. */
+    data class IgnBit(val on: Boolean) : CanboxValue
     data class Reverse(val on: Boolean) : CanboxValue
     data class ParkingBrake(val on: Boolean) : CanboxValue
     /** The box's own crank/run state. */

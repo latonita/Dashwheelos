@@ -60,6 +60,11 @@ internal class XyautoBusPublisher(private val out: Publisher) {
                 )
             )
             is CanboxValue.Tyre -> tyre(v.reading)
+            // The canbox is the ACC source on a unit that has one; CarPower's broadcast value is published DEGRADED
+            // there, so this outranks it while the box talks, and the broadcast takes over when the source goes down.
+            is CanboxValue.Acc -> out.put(K.IGNITION, v.on)
+            // Position known, meaning not (set in ACC, crank and run alike): no key for it.
+            is CanboxValue.IgnBit -> Unit
             is CanboxValue.Reverse -> out.put(K.REVERSE, v.on)
             is CanboxValue.ParkingBrake -> out.put(K.HANDBRAKE, v.on)
             is CanboxValue.EngineRunning -> out.put(K.ENGINE_RUNNING, v.running)

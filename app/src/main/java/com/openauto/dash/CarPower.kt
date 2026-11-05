@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import com.openauto.dash.vehicle.K
+import com.openauto.dash.vehicle.Quality
 import com.openauto.dash.vehicle.Source
 import com.openauto.dash.vehicle.SourceKind
 import com.openauto.dash.vehicle.Vehicle
@@ -62,7 +63,10 @@ object CarPower {
 
     private fun setIgnition(on: Boolean?) {
         ignition = on
-        busPublisher.put(K.IGNITION, on)
+        // Where the canbox also says the ignition, the broadcast is the fallback: DEGRADED loses to a live canbox value at
+        // the same rank, and stands alone when the box is silent or absent.
+        val quality = if (UnitPlatform.adapter.ignitionOnBus) Quality.DEGRADED else Quality.GOOD
+        busPublisher.put(K.IGNITION, on, quality)
     }
 
     /** When this process saw the car switched on (elapsedRealtime), 0 if it hasn't. */

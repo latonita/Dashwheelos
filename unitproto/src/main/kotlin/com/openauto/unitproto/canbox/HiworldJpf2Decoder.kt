@@ -9,7 +9,7 @@ import com.openauto.unitproto.canbox.CanBytes.u8
  * frame. They are the vendor's and their layout is not negotiable.
  *
  * ```
- * 0x72 STATE   [0]    bits 0 ACC, 1 illumination, 2 reverse
+ * 0x72 STATE   [0]    bits 0 ACC, 1 illumination, 2 reverse, 4 raw ignition bit
  *              [2]    steering-wheel key        (not decoded)
  *              [3]    dimmer, 0..100 %
  *              [4..5] steering angle            (not decoded: the WK never fills it)
@@ -35,7 +35,9 @@ open class HiworldJpf2Decoder : CanboxDecoder {
             HiworldJpf2Cmd.STATE -> listOfNotNull(
                 HiworldJpf2Signals.reverse(p)?.let { CanboxValue.Reverse(it) },
                 HiworldJpf2Signals.lightsOn(p)?.let { CanboxValue.Lights(it) },
-                HiworldJpf2Signals.dimmerPct(p)?.let { CanboxValue.Dimmer(it) }
+                HiworldJpf2Signals.dimmerPct(p)?.let { CanboxValue.Dimmer(it) },
+                HiworldJpf2Signals.acc(p)?.let { CanboxValue.Acc(it) },
+                HiworldJpf2Signals.ignBit(p)?.let { CanboxValue.IgnBit(it) }
             )
             HiworldJpf2Cmd.BODY -> listOfNotNull(HiworldJpf2Signals.doors(p)?.let { CanboxValue.Doors(it) })
             // A blank (0) withdraws the lever, so a consumer can fall back on another gear source.
@@ -86,6 +88,8 @@ object HiworldJpf2Signals {
 
     /** `0x72`: the status flags, and the illumination and reverse bits among them. */
     const val OFF_FLAGS = 0
+    const val FLAG_ACC = 0x01
+    const val FLAG_IGN = 0x10
     const val FLAG_ILLUMINATION = 0x02
     const val FLAG_REVERSE = 0x04
     /** `0x72`: the instrument-panel dimmer, 0..100 %, 0 with the lights off. */
@@ -124,6 +128,18 @@ object HiworldJpf2Signals {
             bonnet = false
         )
     }
+
+    /** `0x72` flags bit 0: the box's ACC input is live (the key is in ACC or on). Null for a short payload. */
+    fun acc(payload: ByteArray?): Boolean? =
+        u8(payload, OFF_FLAGS)?.let { it and FLAG_ACC != 0 }
+
+    /**
+     * `0x72` flags bit 4: the box's "raw ignition bit" (the Jeep profile's `0x000` byte 0, bit 0). Its position is
+     * from the firmware analysis; what it means is not established: it reads 1 in all of ACC, crank and run in
+     * the drive log, so it is decoded but not used. Null for a short payload.
+     */
+    fun ignBit(payload: ByteArray?): Boolean? =
+        u8(payload, OFF_FLAGS)?.let { it and FLAG_IGN != 0 }
 
     /**
      * `0x72` flags bit 1: the instrument panel is lit, which on the WK
