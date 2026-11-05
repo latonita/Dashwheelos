@@ -35,6 +35,8 @@ internal class DashboardUiState(
     var settingsTab by mutableStateOf(settingsTab)
     /** (page, index) of the launch bar whose apps are being edited. */
     var launchBarEditor by mutableStateOf<Pair<Int, Int>?>(null)
+    /** (page, index) of the Custom gauge whose signal is being chosen (a fresh copy opens it at once). */
+    var gaugeEditor by mutableStateOf<Pair<Int, Int>?>(null)
 
     var showAllApps by mutableStateOf(false)
     var showSplitPicker by mutableStateOf(false)
@@ -125,6 +127,7 @@ internal class DashboardUiState(
         showSplitEnable = false
         showDevicePicker = false
         launchBarEditor = null
+        gaugeEditor = null
         // Stopped, not seen: offered again at the next start.
         tourStep = null
     }

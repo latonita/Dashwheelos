@@ -148,6 +148,8 @@ internal fun rememberWidgetFace(kind: BuiltinKind, env: SkinTileEnv): WidgetFace
     BuiltinKind.TYRES -> tyresFace()
     // Live views and the spec sheet: they keep their content and get the design's frame (DesignFrame).
     BuiltinKind.NAVMAP, BuiltinKind.PIP_ANCHOR, BuiltinKind.MAPS_INSIDE, BuiltinKind.MY_CAR -> null
+    // The Custom gauge has its own settings and takes no designs (the panel offers none).
+    BuiltinKind.CUSTOM_GAUGE -> null
     // The bar has no designs of its own: it is buttons.
     BuiltinKind.DASH_BAR -> null
 }

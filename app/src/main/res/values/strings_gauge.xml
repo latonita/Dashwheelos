@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Custom gauge tile (CustomGauge.kt, CustomGaugeModel.kt) -->
+    <string name="gauge_kind">Custom gauge</string>
+    <string name="gauge_kind_blurb">One vehicle signal of your choice as a dial, a bar or a number</string>
+    <string name="gauge_pick_signal">Choose a signal first</string>
+    <string name="gauge_pick_hint">Open the tile’s options to choose a signal</string>
+    <string name="gauge_options">Signal, style and range</string>
+    <string name="gauge_sheet_title">Custom gauge</string>
+    <string name="gauge_style">Style</string>
+    <string name="gauge_style_dial">Dial</string>
+    <string name="gauge_style_bar_h">Horizontal bar</string>
+    <string name="gauge_style_bar_v">Vertical bar</string>
+    <string name="gauge_style_number">Number</string>
+    <string name="gauge_range">Scale (%1$s)</string>
+    <string name="gauge_min">From</string>
+    <string name="gauge_max">To</string>
+    <string name="gauge_range_default">Blank = the usual scale for this signal</string>
+    <string name="gauge_signal">Signal</string>
+    <string name="gauge_no_data">no data yet</string>
+    <string name="gauge_unknown_signal">Unknown signal</string>
+    <string name="gauge_save">Done</string>
+    <string name="gauge_key_vehicle_speed">Vehicle speed</string>
+    <string name="gauge_key_gps_speed">GPS speed</string>
+    <string name="gauge_key_speed">Speed</string>
+    <string name="gauge_key_steering_angle">Steering angle</string>
+    <string name="gauge_key_car_heading">Car heading</string>
+    <string name="gauge_key_rpm">Engine speed</string>
+    <string name="gauge_key_throttle">Throttle</string>
+    <string name="gauge_key_engine_load">Engine load</string>
+    <string name="gauge_key_coolant_temp">Coolant temperature</string>
+    <string name="gauge_key_intake_temp">Intake air temperature</string>
+    <string name="gauge_key_fuel_flow">Fuel flow</string>
+    <string name="gauge_key_battery_volts">Battery voltage</string>
+    <string name="gauge_key_fuel_level">Fuel level</string>
+    <string name="gauge_key_fuel_litres">Fuel in tank</string>
+    <string name="gauge_key_range">Range</string>
+    <string name="gauge_key_fuel_consumption">Fuel consumption</string>
+    <string name="gauge_key_outside_temp">Outside temperature</string>
+    <string name="gauge_key_forecast_temp">Forecast temperature</string>
+    <string name="gauge_key_ambient_temp">Ambient temperature</string>
+    <string name="gauge_key_instrument_dimmer">Instrument dimmer</string>
+    <string name="gauge_key_odometer">Odometer</string>
+    <string name="gauge_key_trip_distance">Trip distance</string>
+    <string name="gauge_domain_motion">Motion</string>
+    <string name="gauge_domain_powertrain">Engine and drivetrain</string>
+    <string name="gauge_domain_energy">Fuel and battery</string>
+    <string name="gauge_domain_trip">Trip</string>
+    <string name="gauge_domain_environment">Temperatures outside</string>
+    <string name="gauge_domain_body">Body</string>
+    <string name="gauge_domain_tyres">Tyres</string>
+    <string name="gauge_domain_climate">Climate</string>
+    <string name="gauge_domain_driver_aids">Driver aids</string>
+    <string name="gauge_domain_identity">Identity</string>
+</resources>

@@ -1,5 +1,6 @@
 package com.openauto.dash
 
+import com.openauto.dash.vehicle.K
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -265,7 +266,9 @@ private fun WidgetsTab(
                     kind.label, kind.blurb, tileAspect(kind.defaultW, kind.defaultH), onClick = { onPickBuiltin(kind) },
                     chip = missing(kind)?.let { stringResource(it.needsRes) }, placed = kind in placed
                 ) {
-                    previewTile(DashboardItem.BuiltinWidget(kind, w = kind.defaultW, h = kind.defaultH))
+                    // A Custom gauge has no signal of its own yet: its card shows the speed.
+                    val sample = if (kind == BuiltinKind.CUSTOM_GAUGE) GaugeConfig(K.SPEED.id, GaugeStyle.DIAL).encode() else ""
+                    previewTile(DashboardItem.BuiltinWidget(kind, w = kind.defaultW, h = kind.defaultH, opts = sample))
                 }
             }
         }
