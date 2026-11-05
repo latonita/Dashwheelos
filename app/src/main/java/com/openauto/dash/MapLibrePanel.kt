@@ -6,8 +6,16 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.content.pm.PackageManager
+import android.util.Log
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +36,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Navigation
@@ -67,9 +78,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,6 +97,8 @@ import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -101,10 +119,6 @@ import com.mapbox.mapboxsdk.maps.MapboxMap
 import com.mapbox.mapboxsdk.maps.MapboxMapOptions
 import com.mapbox.mapboxsdk.maps.MapView
 import com.mapbox.mapboxsdk.maps.Style
-import com.mapbox.mapboxsdk.style.expressions.Expression
-import com.mapbox.mapboxsdk.style.layers.FillExtrusionLayer
-import com.mapbox.mapboxsdk.style.layers.PropertyFactory
-import com.mapbox.mapboxsdk.style.sources.VectorSource
 import org.maplibre.geojson.Point
 import org.maplibre.navigation.core.models.DirectionsResponse
 import org.maplibre.navigation.core.models.DirectionsRoute
@@ -175,7 +189,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     // Paused or stopped it is not: a tile map put to sleep came back black.
     val pageActive = LocalPageActive.current
     LaunchedEffect(pageActive) {
-        mapView.setMaximumFps(if (!pageActive) HIDDEN_FPS else if (wallpaper) WALLPAPER_FPS else Int.MAX_VALUE)
+        mapView.setMaximumFps(if (!pageActive) HIDDEN_FPS else if (wallpaper) WALLPAPER_FPS else TILE_FPS)
         if (pageActive) mapRef?.triggerRepaint()
     }
 
@@ -190,6 +204,35 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     var info by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    // The destination panel: a magnifier on the map until it is tapped.
+    var searchOpen by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val hostView = LocalView.current
+    val focusManager = LocalFocusManager.current
+
+    // When the panel last opened (uptime ms): touches on the map in the first
+    // moments after are the tail of the magnifier tap or the layout settling,
+    // not the driver reaching for the map.
+    val searchOpenedAt = remember { longArrayOf(0L) }
+    val searchFocusRequester = remember { FocusRequester() }
+
+    /** The one way the panel opens. */
+    fun openSearch(reason: String) {
+        Log.d(SEARCH_TAG, "open ($reason) was=$searchOpen")
+        searchOpenedAt[0] = android.os.SystemClock.uptimeMillis()
+        searchOpen = true
+    }
+
+    /** The one way the panel closes: panel away, keyboard with it, the Android focus back on the map. */
+    fun closeSearch(reason: String) {
+        Log.d(SEARCH_TAG, "close ($reason) was=$searchOpen")
+        searchOpen = false
+        keyboard?.hide()
+        focusManager.clearFocus(force = true)
+        mapView.isFocusable = true
+        mapView.isFocusableInTouchMode = true
+        mapView.requestFocus()
+    }
 
     fun clearRoute() {
         route = null; destination = null; destinationName = null; info = null; error = null
@@ -255,12 +298,14 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             loading = false
             routeTo(Point.fromLngLat(place.lng, place.lat))
             destinationName = place.name
+            closeSearch("search result routed")
         }
     }
 
     /** A saved place or a last destination, tapped: its route, ready to start. */
     fun routeToPlace(place: Place) {
         clearRoute()
+        closeSearch("saved place picked")
         val ll = LatLng(place.lat, place.lng)
         mapRef?.addMarker(MarkerOptions().position(ll))
         routeTo(Point.fromLngLat(place.lng, place.lat))
@@ -280,7 +325,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
         // A route the guidance refuses goes to the navigation app instead.
         if (!inOtherApp && shown != null && hasLocationPerm(context) && InAppNav.start(context, shown, dest, name)) {
             // Back to the car straight away, not after the preview's pause.
-            mapRef?.let { followVehicle(it.locationComponent, null, userZooms[it]) }
+            mapRef?.let { followVehicle(it.locationComponent, mapView, wallpaper, userZooms[it]) }
         } else if (!NavHandoff.start(context, lat, lng, name.orEmpty())) {
             error = context.getString(R.string.places_no_nav_app)
             return
@@ -339,6 +384,12 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             // No MapLibre wordmark on the dashboard. The attribution (i)
             // stays: OpenStreetMap's licence and the tile providers ask for it.
             map.uiSettings.isLogoEnabled = false
+            // The compass keeps to the top right corner: the search is a magnifier
+            // at the top left now. Margins are pixels.
+            map.uiSettings.isCompassEnabled = !wallpaper
+            map.uiSettings.compassGravity = android.view.Gravity.TOP or android.view.Gravity.END
+            val d = context.resources.displayMetrics.density
+            map.uiSettings.setCompassMargins(0, (12 * d).toInt(), (12 * d).toInt(), 0)
             // Under the dashboard nothing reaches the map by touch anyway.
             if (wallpaper) map.uiSettings.setAllGesturesEnabled(false)
             mapRef = map
@@ -350,8 +401,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     val lightMap = DashColors.Light
     // The listener below is registered once; it reads the lock's latest state.
     val movingNow = rememberUpdatedState(moving)
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
     // Whether the destination box holds the cursor, so a touch of the map can
     // put it down again — and only then, so every other touch is left alone.
     val searchFocused = remember { mutableStateOf(false) }
@@ -361,7 +410,6 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(mapRef, styleUrl) {
         val map = mapRef ?: return@LaunchedEffect
         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
-            add3dBuildings(style, lightMap)
             // The route's source and layers belong to the style, and switching
             // between the day and night styles builds a new one — so the line
             // has to be made again each time or it disappears with the old
@@ -394,14 +442,27 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                 // focusable in touch mode, so the driver's touch lands where
                 // they aimed it. The same hand-off at startup stops the box
                 // from grabbing the cursor before anyone has asked to type.
-                fun dismissSearch() {
-                    if (!searchFocused.value) return
-                    keyboard?.hide()
-                    focusManager.clearFocus(force = true)
-                    mapView.requestFocus()
+                // Only a real touch of the map counts, and only once the panel
+                // has been open a moment. A camera move the app makes itself
+                // (tracking each fix, the look-ahead padding re-applied when the
+                // keyboard resizes the window) is not the driver.
+                fun dismissSearch(why: String) {
+                    if (!searchOpen) return
+                    val age = android.os.SystemClock.uptimeMillis() - searchOpenedAt[0]
+                    if (age < SEARCH_GRACE_MS) {
+                        Log.d(SEARCH_TAG, "dismiss ignored ($why) age=${age}ms")
+                        return
+                    }
+                    closeSearch("map touch: $why")
                 }
-                map.addOnMapClickListener { dismissSearch(); false }
-                map.addOnCameraMoveStartedListener { dismissSearch() }
+                map.addOnMapClickListener { dismissSearch("click"); false }
+                map.addOnCameraMoveStartedListener { reason ->
+                    if (reason == MapboxMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        dismissSearch("gesture")
+                    } else if (searchOpen) {
+                        Log.d(SEARCH_TAG, "camera move ignored reason=$reason")
+                    }
+                }
                 // The map takes the focus first, so the keyboard does not open
                 // over the map the moment the dashboard appears.
                 mapView.requestFocus()
@@ -461,7 +522,7 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
     LaunchedEffect(hasLocation, styleReady) {
         if (!hasLocation || !styleReady) return@LaunchedEffect
         val map = mapRef ?: return@LaunchedEffect
-        map.getStyle { style -> enableLocation(map, style, context, scope, if (wallpaper) mapView else null) }
+        map.getStyle { style -> enableLocation(map, style, context, scope, mapView, wallpaper) }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -479,10 +540,54 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
             val places by PlacesStore.places.collectAsState()
             LaunchedEffect(Unit) { PlacesStore.load(context) }
             // While guiding, the turn banner has the top of the map.
-            if (guidance == null) Column(
-                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Opened: the map stops being focusable, the box takes the cursor and
+            // the keyboard comes up (parked only). Keyed on the state, not on the
+            // animated content, so it runs once per opening.
+            LaunchedEffect(searchOpen) {
+                if (!searchOpen) return@LaunchedEffect
+                Log.d(SEARCH_TAG, "open effect moving=$moving")
+                mapView.isFocusable = false
+                mapView.isFocusableInTouchMode = false
+                if (mapView.hasFocus()) mapView.clearFocus()
+                if (moving) return@LaunchedEffect
+                delay(150) // the field is composed and laid out by now
+                val ok = runCatching { searchFocusRequester.requestFocus() }
+                Log.d(SEARCH_TAG, "requestFocus -> $ok")
+                delay(50)
+                Log.d(SEARCH_TAG, "keyboard.show()")
+                keyboard?.show()
+                delay(350)
+                // Fallback for a keyboard that was slow to bind.
+                if (searchOpen) {
+                    Log.d(SEARCH_TAG, "IMM showSoftInput fallback focused=${searchFocused.value}")
+                    runCatching {
+                        (hostView.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                            ?.showSoftInput(hostView, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }
+            }
+            LaunchedEffect(guidance != null) { if (guidance != null && searchOpen) closeSearch("guidance started") }
+            if (guidance == null) Box(
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
             ) {
+                if (!searchOpen) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        MapButton(Icons.Filled.Search, stringResource(R.string.info_map_search)) { openSearch("magnifier") }
+                        // The route can be dropped without opening the search.
+                        if (route != null) {
+                            MapButton(Icons.Filled.Close, stringResource(R.string.info_map_clear_route), tint = DashColors.Muted) { clearRoute() }
+                        }
+                    }
+                }
+                AnimatedVisibility(
+                    visible = searchOpen,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+                ) {
+                    Column(
+                        modifier = Modifier.widthIn(max = 560.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
             Surface(
                 color = OverlayBg,
                 shape = DashShape.Medium,
@@ -497,7 +602,11 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
-                            .onFocusChanged { searchFocused.value = it.isFocused }
+                            .focusRequester(searchFocusRequester)
+                            .onFocusChanged {
+                                Log.d(SEARCH_TAG, "field focus=${it.isFocused} open=$searchOpen")
+                                searchFocused.value = it.isFocused
+                            }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyUp &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -525,19 +634,56 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     if (loading) {
                         CircularProgressIndicator(modifier = Modifier.size(28.dp), color = Accent, strokeWidth = 3.dp)
                     } else {
-                        IconButton(onClick = { submitSearch() }) {
+                        IconButton(onClick = { submitSearch() }, modifier = Modifier.size(MapButtonSize)) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.info_map_search), tint = AccentMark)
                         }
                     }
-                    if (route != null) {
-                        IconButton(onClick = { clearRoute() }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.info_map_clear_route), tint = DashColors.Muted)
-                        }
+                    IconButton(onClick = { closeSearch("close button") }, modifier = Modifier.size(MapButtonSize)) {
+                        Icon(Icons.Filled.Close, contentDescription = null, tint = DashColors.Muted)
                     }
                 }
             }
             // Out of the way once a destination is set: the route is what matters then.
             if (destination == null) PlaceChips(places, onPick = { routeToPlace(it) })
+                    }
+                }
+            }
+
+            // Zoom and back to the car: always, moving or not (the drive lock is for typing).
+            val zoomState = remember { doubleArrayOf(0.0, 0.0) }
+            fun zoomBy(delta: Int) {
+                val map = mapRef ?: return
+                val now = System.currentTimeMillis()
+                // Quick taps add up from the zoom being animated to, not the one the camera has reached.
+                val base = if (now - zoomState[1].toLong() < 600) zoomState[0] else map.cameraPosition.zoom
+                val z = (base + delta).coerceIn(map.minZoomLevel, map.maxZoomLevel)
+                zoomState[0] = z; zoomState[1] = now.toDouble()
+                userZooms[map] = z
+                val lc = runCatching { map.locationComponent }.getOrNull()
+                if (lc != null && lc.isLocationComponentActivated && lc.cameraMode != CameraMode.NONE) {
+                    // Through the component: a plain zoom would drop tracking, and the
+                    // resume ten seconds on would snap back to the old zoom.
+                    runCatching { lc.zoomWhileTracking(z, 300L) }
+                } else {
+                    map.animateCamera(CameraUpdateFactory.zoomTo(z), 300)
+                }
+            }
+            fun recenter() {
+                val map = mapRef ?: return
+                val lc = runCatching { map.locationComponent }.getOrNull() ?: return
+                if (!lc.isLocationComponentActivated) return
+                val fix = LocationFeed.location.value ?: runCatching { lc.lastKnownLocation }.getOrNull()
+                if (fix == null) return
+                userZooms.remove(map); userMoved.remove(map)
+                followVehicle(lc, mapView, wallpaper = false, zoom = null)
+            }
+            Column(
+                modifier = Modifier.align(Alignment.CenterEnd).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MapButton(Icons.Filled.Add, stringResource(R.string.info_map_zoom_in)) { zoomBy(1) }
+                MapButton(Icons.Filled.Remove, stringResource(R.string.info_map_zoom_out)) { zoomBy(-1) }
+                MapButton(Icons.Filled.MyLocation, stringResource(R.string.info_map_recenter)) { recenter() }
             }
 
             val guiding = guidance
@@ -584,6 +730,18 @@ fun MapLibrePanel(modifier: Modifier = Modifier, wallpaper: Boolean = false) {
                     }
                 }
             }
+        }
+    }
+}
+
+private val MapButtonSize = 64.dp
+
+/** A square touch target over the map, in the overlay's colours. */
+@Composable
+private fun MapButton(icon: ImageVector, description: String, tint: Color = AccentMark, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = OverlayBg, shape = DashShape.Medium, modifier = Modifier.size(MapButtonSize)) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(32.dp))
         }
     }
 }
@@ -647,8 +805,9 @@ private fun enableLocation(
     style: Style,
     context: Context,
     scope: kotlinx.coroutines.CoroutineScope,
-    /** Set when the map is a wallpaper: the camera sits lower and the car low on it. */
-    wallpaper: MapView? = null
+    mapView: MapView,
+    /** Set when the map is a wallpaper: the camera sits lower and the car lower on it. */
+    wallpaper: Boolean
 ) {
     if (!hasLocationPerm(context)) return
     val lc = map.locationComponent
@@ -668,6 +827,7 @@ private fun enableLocation(
             var byGesture = false
             map.addOnCameraMoveStartedListener { reason ->
                 byGesture = reason == MapboxMap.OnCameraMoveStartedListener.REASON_API_GESTURE
+                if (byGesture) userMoved[map] = true
             }
             map.addOnCameraIdleListener {
                 if (byGesture) userZooms[map] = map.cameraPosition.zoom
@@ -683,7 +843,7 @@ private fun enableLocation(
                     resume?.cancel()
                     resume = scope.launch {
                         delay(TRACKING_RESUME_MS)
-                        followVehicle(lc, wallpaper, userZooms[map])
+                        followVehicle(lc, mapView, wallpaper, userZooms[map])
                     }
                 }
 
@@ -692,27 +852,70 @@ private fun enableLocation(
                 }
             })
         }
-        lc.isLocationComponentEnabled = true
-        // Directional puck; the camera follows position AND heading (map rotates
-        // with the car) at a close zoom with pitch for the driving-nav look.
-        lc.renderMode = RenderMode.COMPASS
-        followVehicle(lc, wallpaper, userZooms[map])
-    }
-    // TRACKING_GPS only re-centres on a FRESH fix; with only a last-known
-    // location the camera stays at the default world view. Once any fix exists,
-    // fly to it *through* the component: a plain animateCamera here would
-    // count as a developer move and cancel tracking straight away.
-    scope.launch {
-        repeat(15) {
-            val loc = runCatching { lc.lastKnownLocation }.getOrNull()
-            if (loc != null) {
-                followVehicle(lc, wallpaper, userZooms[map])
-                return@launch
+        // Opens where the car was last seen, not at the whole world, while
+        // tracking waits for a fix. A plain move: tracking is not on yet.
+        if (positioned.add(map) && userMoved[map] != true) {
+            val last = LocationFeed.location.value
+                ?: runCatching { lc.lastKnownLocation }.getOrNull()
+            if (last != null) {
+                runCatching {
+                    map.moveCamera(
+                        CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.Builder()
+                                .target(LatLng(last.latitude, last.longitude))
+                                .zoom(userZooms[map] ?: if (wallpaper) 17.0 else 16.5)
+                                .tilt(if (wallpaper) 60.0 else 45.0)
+                                .build()
+                        )
+                    )
+                }
             }
-            delay(800)
+        }
+        // The map has no height until it is laid out, and changes with its size.
+        if (lookAheadHooked.add(mapView)) {
+            mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                if (bottom - top != oldBottom - oldTop) applyLookAhead(lc, mapView, wallpaper)
+            }
+        }
+        lc.isLocationComponentEnabled = true
+        // Puck arrow from the GPS course (no magnetometer); the camera follows position AND heading (map rotates
+        // with the car) at a close zoom with pitch for the driving-nav look.
+        followVehicle(lc, mapView, wallpaper, userZooms[map])
+    }
+    // Stationary detection from the fixes: stopped, the map holds its bearing.
+    if (motionHooked.add(map)) {
+        scope.launch {
+            val det = StationaryDetector()
+            var prev: android.location.Location? = null
+            LocationFeed.location.filterNotNull().collect { fix ->
+                val kmh = StationaryDetector.speedKmh(fix, prev)
+                prev = fix
+                if (kmh != null) applyMotion(map, lc, mapView, wallpaper, det.update(System.currentTimeMillis(), kmh))
+            }
         }
     }
+    // TRACKING_GPS only re-centres on a FRESH fix; with only a last-known
+    // location the camera stays where it was put above. Wait, as long as it
+    // takes (a cold GPS in a car can take minutes), for the first fix, then
+    // engage tracking *through* the component: a plain animateCamera here
+    // would count as a developer move and cancel tracking straight away.
+    // A driver who has already moved the map is left alone; the resume timer
+    // brings the camera back to the car.
+    scope.launch {
+        val held = LocationFeed.acquire(context.applicationContext)
+        try {
+            LocationFeed.location.filterNotNull().first()
+        } finally {
+            if (held) LocationFeed.release()
+        }
+        if (userMoved[map] != true) followVehicle(lc, mapView, wallpaper, userZooms[map])
+    }
 }
+
+private const val SEARCH_TAG = "DashMapSearch"
+
+/** A map touch this soon after the search panel opened does not close it. */
+private const val SEARCH_GRACE_MS = 1_000L
 
 /** Seconds of free panning before the camera snaps back to the vehicle. */
 private const val TRACKING_RESUME_MS = 10_000L
@@ -720,22 +923,78 @@ private const val TRACKING_RESUME_MS = 10_000L
 /** Zoom last set by a pinch on each map; tracking resumes at it instead of the default. */
 private val userZooms = java.util.WeakHashMap<MapboxMap, Double>()
 
-/** Follow position and heading with the driving-nav zoom and pitch, keeping tracking on. */
-private fun followVehicle(lc: LocationComponent, wallpaper: MapView? = null, zoom: Double? = null) {
-    if (wallpaper == null) {
-        runCatching { lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 16.5, null, 45.0, null) }
-        return
-    }
-    // A wallpaper looks further ahead: steeper, a little closer, and the car
-    // pushed down to the lower part of the screen, between the panels.
+/** Maps whose driver has panned or zoomed them by hand: the first-fix jump leaves those alone. */
+private val userMoved = java.util.WeakHashMap<MapboxMap, Boolean>()
+
+/** Maps already put at the last known position, once. */
+private val positioned = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapboxMap, Boolean>())
+
+/** Maps already watching the fixes for stationary / moving. */
+private val motionHooked = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapboxMap, Boolean>())
+
+/** Map views that already watch their layout for [applyLookAhead]. */
+private val lookAheadHooked = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MapView, Boolean>())
+
+/** Location components whose car stands still: the camera and puck then ignore GPS bearing. */
+private val stationaryLcs = java.util.Collections.newSetFromMap(java.util.WeakHashMap<LocationComponent, Boolean>())
+
+/**
+ * Follow position, and heading while moving, with the driving-nav zoom and
+ * pitch, keeping tracking on. The moving puck arrow is the GPS course, never
+ * the head unit's compass. Standing still the camera keeps its bearing
+ * (TRACKING) and the puck does not turn with GPS noise.
+ */
+private fun followVehicle(lc: LocationComponent, view: MapView, wallpaper: Boolean, zoom: Double? = null) {
+    val still = lc in stationaryLcs
+    // A wallpaper looks further ahead: steeper, a little closer.
     runCatching {
-        lc.setCameraMode(CameraMode.TRACKING_GPS, 1000L, zoom ?: 17.0, null, 60.0, null)
-        lc.paddingWhileTracking(doubleArrayOf(0.0, wallpaper.height * 0.42, 0.0, 0.0))
+        lc.renderMode = if (still) RenderMode.NORMAL else RenderMode.GPS
+        val mode = if (still) CameraMode.TRACKING else CameraMode.TRACKING_GPS
+        if (wallpaper) lc.setCameraMode(mode, 1000L, zoom ?: 17.0, null, 60.0, null)
+        else lc.setCameraMode(mode, 1000L, zoom ?: 16.5, null, 45.0, null)
     }
+    applyLookAhead(lc, view, wallpaper)
+}
+
+/** The car stopped or set off: switch bearing-following and the puck, keeping zoom, tilt and padding. */
+private fun applyMotion(map: MapboxMap, lc: LocationComponent, view: MapView, wallpaper: Boolean, still: Boolean) {
+    if ((lc in stationaryLcs) == still) return
+    if (still) stationaryLcs.add(lc) else stationaryLcs.remove(lc)
+    Log.d("DashMapMotion", "stationary=$still wallpaper=$wallpaper cameraMode=${runCatching { lc.cameraMode }.getOrNull()}")
+    runCatching {
+        lc.renderMode = if (still) RenderMode.NORMAL else RenderMode.GPS
+        // Not tracking (the driver is panning): the 10 s resume picks the right mode up.
+        if (lc.cameraMode != CameraMode.NONE) {
+            val cam = map.cameraPosition
+            lc.setCameraMode(if (still) CameraMode.TRACKING else CameraMode.TRACKING_GPS, 600L, cam.zoom, null, cam.tilt, null)
+            applyLookAhead(lc, view, wallpaper)
+        }
+    }
+}
+
+/**
+ * The car pushed down from the middle of the map, so more of the road ahead
+ * shows: top padding p moves it down by p/2. Skipped until the map has a height;
+ * the layout listener comes back here once it does.
+ */
+private fun applyLookAhead(lc: LocationComponent, view: MapView, wallpaper: Boolean) {
+    val h = view.height
+    if (h <= 0) return
+    val top = h * if (wallpaper) WALLPAPER_LOOK_AHEAD else TILE_LOOK_AHEAD
+    runCatching { lc.paddingWhileTracking(doubleArrayOf(0.0, top, 0.0, 0.0)) }
 }
 
 /** The wallpaper map's frame cap: smooth enough for a car moving under it, half the work of 60. */
 private const val WALLPAPER_FPS = 30
+
+/** The interactive map's frame cap: 30 is plenty for the head unit's Mali-450 and leaves the CPU/GPU to the rest of the dashboard. */
+private const val TILE_FPS = 30
+
+/** Top padding while tracking, as a share of the map's height: it moves the car down by half of it, to about a quarter from the bottom. */
+private const val TILE_LOOK_AHEAD = 0.5
+
+/** The same for the wallpaper map. */
+private const val WALLPAPER_LOOK_AHEAD = 0.42
 
 /**
  * A map's frame cap on a page off screen. The cap is a sleep after each frame
@@ -744,31 +1003,6 @@ private const val WALLPAPER_FPS = 30
  * most, over by the time a sliding page shows much of the map.
  */
 private const val HIDDEN_FPS = 10
-
-/**
- * Adds extruded 3D buildings to the vector basemap, tinted for its [light] or dark
- * version. The building geometry lives in the style's vector source under the
- * OpenMapTiles `building` source-layer with `render_height` / `render_min_height`.
- * We detect the source id at runtime so this works regardless of what the style
- * names it, and skip silently if unavailable.
- */
-private fun add3dBuildings(style: Style, light: Boolean) {
-    runCatching {
-        val sourceId = style.sources.firstOrNull { it is VectorSource }?.id ?: return
-        if (style.getLayer("3d-buildings") != null) return
-        val layer = FillExtrusionLayer("3d-buildings", sourceId).apply {
-            sourceLayer = "building"
-            setProperties(
-                PropertyFactory.fillExtrusionColor(android.graphics.Color.parseColor(if (light) "#D5D8DE" else "#2B2F36")),
-                PropertyFactory.fillExtrusionHeight(Expression.get("render_height")),
-                PropertyFactory.fillExtrusionBase(Expression.get("render_min_height")),
-                PropertyFactory.fillExtrusionOpacity(0.85f)
-            )
-            setMinZoom(14f)
-        }
-        style.addLayer(layer)
-    }
-}
 
 private fun hasLocationPerm(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
