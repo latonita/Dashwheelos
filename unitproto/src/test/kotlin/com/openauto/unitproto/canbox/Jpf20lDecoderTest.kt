@@ -327,7 +327,20 @@ class Jpf20lDecoderTest {
         assertTrue(withFlags(0x04).noSignal)
         assertFalse(withFlags(0x04).leak)
         // Unused bits are ignored.
-        assertEquals(withFlags(0x01), withFlags(0xF9))
+        assertEquals(withFlags(0x01), withFlags(0xF1))
+        // Bit 3: the car's own low-pressure warning, independent of the others.
+        assertTrue(withFlags(0x08).lowPressureWarn)
+        assertFalse(withFlags(0x08).leak || withFlags(0x08).sensorBatteryLow || withFlags(0x08).noSignal)
+        assertFalse(withFlags(0x07).lowPressureWarn)
+        assertTrue(withFlags(0x0F).lowPressureWarn && withFlags(0x0F).leak)
+    }
+
+    @Test
+    fun theTyreTemperature_isBiasedBy40_andFFIsNull() {
+        assertEquals(40, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0x50, 0x00))!!.celsius)
+        assertEquals(-40, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0x00, 0x00))!!.celsius)
+        assertNull(Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFF, 0x00))!!.celsius)
+        assertEquals(230, Jpf20lSignals.tyre(bytes(0x00, 0x00, 0xE6, 0xFF, 0x00))!!.kPa)
     }
 
     @Test

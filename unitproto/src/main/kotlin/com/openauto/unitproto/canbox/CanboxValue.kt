@@ -75,8 +75,8 @@ data class CompassReading(val sector: Int, val headingDeg: Int)
 /**
  * One wheel's TPMS reading. [kPa] is null when the box has no pressure for
  * the wheel (before its first poll of the WCM, or once that went stale);
- * [celsius] is null when it has no temperature, which on the WK is always:
- * the WCM's reply carries none.
+ * [celsius] is null when it has no temperature, null when the
+ * sensor gives none (FF).
  */
 data class TyreReading(
     val position: Int,
@@ -84,7 +84,9 @@ data class TyreReading(
     val celsius: Int?,
     val sensorBatteryLow: Boolean,
     val leak: Boolean,
-    val noSignal: Boolean
+    val noSignal: Boolean,
+    /** The car's own low-pressure warning for this tyre (the WCM's; lights the cluster lamp). */
+    val lowPressureWarn: Boolean = false
 ) {
     companion object {
         // The WCM's own order, which the box keeps: the rears are the other

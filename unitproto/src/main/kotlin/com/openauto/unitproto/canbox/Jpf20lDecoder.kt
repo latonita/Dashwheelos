@@ -191,7 +191,8 @@ object Jpf20lCmd {
  * 0xB7 TYRE        [0]    u8   position   0 FL, 1 FR, 2 RR, 3 RL, 4 spare
  *                  [1..2] u16  pressure   kPa; FFFF = not available
  *                  [3]    u8   temp       degC + 40; FF = not available
- *                  [4]    bits 0 sensor battery low, 1 leak, 2 no signal
+ *                  [4]    bits 0 sensor battery low, 1 leak, 2 no signal,
+ *                         3 the car's own low-pressure warning (WCM)
  * 0xB8 FUEL        [0..1] u16  tank       0.1 L; FFFF = not available
  *                  [2..3] u16  range      km; FFFF = not available
  * 0xBB ODOMETER    [0..2] u24  odometer   0.1 km; FFFFFF = not available
@@ -280,6 +281,7 @@ object Jpf20lSignals {
     const val TYRE_SENSOR_BATTERY_LOW = 0x01
     const val TYRE_LEAK = 0x02
     const val TYRE_NO_SIGNAL = 0x04
+    const val TYRE_LOW_WARN = 0x08
 
     /** The highest wheel index the box may report ([TyreReading.SPARE]). */
     const val TYRE_POSITION_MAX = TyreReading.SPARE
@@ -424,7 +426,8 @@ object Jpf20lSignals {
             celsius = celsius,
             sensorBatteryLow = flags and TYRE_SENSOR_BATTERY_LOW != 0,
             leak = flags and TYRE_LEAK != 0,
-            noSignal = flags and TYRE_NO_SIGNAL != 0
+            noSignal = flags and TYRE_NO_SIGNAL != 0,
+            lowPressureWarn = flags and TYRE_LOW_WARN != 0
         )
     }
 }
