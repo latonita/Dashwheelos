@@ -120,7 +120,7 @@ object AppLauncher {
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ?: return false
         val options = ActivityOptions.makeBasic()
-        runCatching { HiddenApi.invoke(ActivityOptions::class.java, options, "setLaunchWindowingMode", WINDOWING_MODE_FULLSCREEN) }
+        LaunchModeCompat.apply(options, WINDOWING_MODE_FULLSCREEN)
         val launched = runCatching { context.startActivity(launchIntent, options.toBundle()); true }
             .recoverCatching { context.startActivity(launchIntent); true }.getOrDefault(false)
         if (launched) AppUsage.opened(context, packageName)

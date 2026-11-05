@@ -763,8 +763,8 @@ internal fun DrawScope.chromeStamp(p: DashPalette, number: StampNumber) {
     // The drop.
     drawChromeDrop(Offset(w * 0.5f, h * 0.42f), h * 0.24f, phase = 0.13f, energy = 0.4f, light = light, glowK = if (light) 0f else 1f)
     // The figures in chrome, drawn with the platform's paint so the metal runs through the letters.
-    chromeStampText("300", w * 0.06f, h * 0.5f, h * 0.2f, Typeface.create(Typeface.SANS_SERIF, 900, false), Paint.Align.LEFT, light)
-    chromeStampText("48", w * 0.95f, h * 0.53f, h * 0.3f, Typeface.create(Typeface.SANS_SERIF, 300, false), Paint.Align.RIGHT, light)
+    chromeStampText("300", w * 0.06f, h * 0.5f, h * 0.2f, robotoWeight(900), Paint.Align.LEFT, light)
+    chromeStampText("48", w * 0.95f, h * 0.53f, h * 0.3f, robotoWeight(300), Paint.Align.RIGHT, light)
     // The foot: two holographic chips and the pill in its bezel.
     val chipTop = h * 0.78f
     val chipH = h * 0.15f

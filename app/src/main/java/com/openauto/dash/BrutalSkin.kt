@@ -207,7 +207,7 @@ private val BAR_BLOCK = 72.dp
 // --- Type ---------------------------------------------------------------------------
 
 /** The heaviest face the unit has: Roboto at 900 (Black). Lazy: the JVM tests have no typefaces. */
-private val BlackFace by lazy { FontFamily(Typeface.create(Typeface.SANS_SERIF, 900, false)) }
+private val BlackFace by lazy { FontFamily(robotoWeight(900)) }
 
 /** Big words and figures sit in a tight line box, so huge type takes no more room than it shows. */
 private val TightLine = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
