@@ -39,6 +39,10 @@
     <string name="widgets_radio_previous">Station précédente</string>
     <string name="widgets_radio_none">Pas de radio sur cet autoradio</string>
     <string name="widgets_radio_empty">Aucune station : enregistrez-en dans l\'appli radio</string>
+    <string name="widgets_radio_empty_add">Touchez + pour enregistrer la station en cours</string>
+    <string name="widgets_radio_remove">Retirer</string>
+    <string name="widgets_radio_rename">Renommer</string>
+    <string name="widgets_radio_frequencies">Fréquences</string>
     <string name="widgets_hw_home">Maison</string>
     <string name="widgets_hw_work">Travail</string>
     <string name="widgets_hw_empty">Réglez Maison et Travail dans Réglages, Conduite, Lieux</string>

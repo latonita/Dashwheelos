@@ -39,6 +39,10 @@
     <string name="widgets_radio_previous">Vorheriger Sender</string>
     <string name="widgets_radio_none">Kein Radio auf diesem Gerät</string>
     <string name="widgets_radio_empty">Noch keine Sender: in der Radio-App speichern</string>
+    <string name="widgets_radio_empty_add">Tippe auf +, um den laufenden Sender zu speichern</string>
+    <string name="widgets_radio_remove">Entfernen</string>
+    <string name="widgets_radio_rename">Umbenennen</string>
+    <string name="widgets_radio_frequencies">Frequenzen</string>
     <string name="widgets_hw_home">Zuhause</string>
     <string name="widgets_hw_work">Arbeit</string>
     <string name="widgets_hw_empty">Zuhause und Arbeit unter Einstellungen, Fahren, Orte festlegen</string>

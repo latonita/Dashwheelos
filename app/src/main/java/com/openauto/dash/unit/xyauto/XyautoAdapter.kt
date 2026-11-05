@@ -10,10 +10,12 @@ import com.openauto.dash.Cap
 import com.openauto.dash.CapClaim
 import com.openauto.dash.IgnitionSource
 import com.openauto.dash.SignalCatalogue
+import com.openauto.dash.StockRadio
 import com.openauto.dash.UnitAdapter
 import com.openauto.dash.UnitCaps
 import com.openauto.dash.UnitPlatform
 import com.openauto.dash.VehicleBusSource
+import com.openauto.dash.XyFmRadio
 import com.openauto.dash.unit.AccBroadcastIgnition
 import com.openauto.dash.unit.KeyBroadcastSource
 import com.openauto.dash.vehicle.Publisher
@@ -43,6 +45,7 @@ internal class XyautoAdapter(context: Context) : UnitAdapter {
 
     private val app = context.applicationContext
     private val hasCanStack = XyautoProtocol.PACKAGES.any { UnitPlatform.hasPackage(app, it) }
+    private val hasRadio = UnitPlatform.hasPackage(app, XyFmRadio.PACKAGE)
 
     override val family = UnitFamily.XYAUTO
     override val ignition: IgnitionSource = AccBroadcastIgnition
@@ -50,6 +53,7 @@ internal class XyautoAdapter(context: Context) : UnitAdapter {
     override val keys = KeyBroadcastSource
     override val phone = null
     override val media = null
+    override val radio: StockRadio? = if (hasRadio) XyFmRadio else null
     override val volume = null
     override val launcher = null
     override val popups = null
@@ -59,6 +63,7 @@ internal class XyautoAdapter(context: Context) : UnitAdapter {
     override val caps: UnitCaps = UnitCaps(buildList {
         add(CapClaim(Cap.IGNITION))
         add(CapClaim(Cap.UNIT_KEYS))
+        if (hasRadio) add(CapClaim(Cap.MEDIA_BRIDGE))
         if (hasCanStack) {
             add(CapClaim(Cap.VEHICLE_BUS))
             add(CapClaim(Cap.SPEED_RPM))
@@ -74,7 +79,7 @@ internal class XyautoAdapter(context: Context) : UnitAdapter {
         settingsSystem = true
     )
 
-    override val vendorPackages: Set<String> = XyautoProtocol.PACKAGES
+    override val vendorPackages: Set<String> = XyautoProtocol.PACKAGES + XyFmRadio.PACKAGE
 }
 
 /**

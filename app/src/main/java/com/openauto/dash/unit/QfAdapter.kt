@@ -21,11 +21,13 @@ import com.openauto.dash.MediaBridge
 import com.openauto.dash.Need
 import com.openauto.dash.PhoneBridge
 import com.openauto.dash.PhoneCall
+import com.openauto.dash.QfRadio
 import com.openauto.dash.PopupTakeover
 import com.openauto.dash.R
 import com.openauto.dash.RomPopups
 import com.openauto.dash.SignalCatalogue
 import com.openauto.dash.SleepSurvival
+import com.openauto.dash.StockRadio
 import com.openauto.dash.SysProps
 import com.openauto.dash.Tyres
 import com.openauto.dash.UnitAdapter
@@ -76,6 +78,7 @@ internal class QfAdapter(context: Context) : UnitAdapter {
     override val keys: KeySource? = if (hasKeyService) QfKeys else null
     override val phone: PhoneBridge? = if (hasBt) QfPhone else null
     override val media: MediaBridge? = if (hasBt || hasRadio) QfMedia else null
+    override val radio: StockRadio? = if (hasRadio) QfRadio else null
     override val volume: VolumeControl? = if (hasUnitVolume) QfVolume else null
     override val launcher: LauncherTakeover? = if (hasLauncherChoice) QfLauncher else null
     override val popups: PopupTakeover = QfPopups(app)

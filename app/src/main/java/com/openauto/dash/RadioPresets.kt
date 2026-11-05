@@ -1,14 +1,11 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.openauto.dash
 
-import android.content.BroadcastReceiver
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.net.Uri
-import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +13,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,171 +51,29 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.core.content.ContextCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.Locale
 
-/** A stored station: [freq] in hundredths of a MHz (9850 = 98.5 MHz). */
 /** An FM frequency in the radio's 10 kHz units (64 to 108 MHz, Eastern Europe's band included); AM ones are in kHz. */
 internal fun isFm(freq: Int): Boolean = freq in 6_000..11_000
 
-internal data class RadioStation(val freq: Int, val name: String) {
-    val mhz: String get() = String.format(Locale.ROOT, "%.1f", freq / 100.0)
-}
+private val NO_STATIONS: StateFlow<List<RadioStation>> = MutableStateFlow(emptyList())
+private val NO_STATION: StateFlow<RadioStation?> = MutableStateFlow(null)
 
 /**
- * The K706's FM radio (com.android.fmradio.ext) from a tile: its stored
- * stations (its open station list), the one playing (its broadcast), and a
- * tap to tune. The radio only takes orders while its screen is alive, so
- * when it isn't, it is started first and the dashboard brought back.
+ * The unit's FM radio from a tile ([StockRadio]: [QfRadio] or [XyFmRadio], whichever the unit's adapter has): its
+ * stations, the one playing, a tap to tune. Where the list is one the driver keeps ([StockRadio.editable]), a "+" cell
+ * saves the station that is playing (room permitting) and a long
+ * press on a station removes it.
  */
-internal object RadioPresets {
-    private const val TAG = "RadioPresets"
-    const val PACKAGE = "com.android.fmradio.ext"
-    private val ACTIVITY = ComponentName(PACKAGE, "com.android.fmradio.FmMainActivity")
-    private val STATIONS = Uri.parse("content://$PACKAGE/station")
-    private const val UPDATE = "com.qf.radio.update_action"
-    // Tunes to the MHz string in TUNE_EXTRA on the band the radio is on, with no region
-    // check. The voice command ("ailit.set.radio.frequency") checks the frequency against
-    // band FM1 of the unit's radio region and says "Invalid frequency, please reset" for
-    // good stations (Eastern Europe FM1 is 65-74 MHz, the US region only takes odd tenths).
-    private const val TUNE = "/customize/radio/station"
-    /** Steps the radio to its next band (FM1, FM2, FM3, AM1, AM2, then FM1 again). */
-    private const val BAND = "/customize/radio/band"
-    /** At most this many steps from AM back to FM, each awaited this long. */
-    private const val BAND_STEPS = 4
-    private const val BAND_WAIT_MS = 1_500L
-    private const val TUNE_EXTRA = "com.qf.radio.update_action_key"
-    private const val AM_BAND = 3
-    private const val NEXT = "/customize/radio/next"
-    private const val PREVIOUS = "/customize/radio/pre"
-    private const val START_WAIT_MS = 1_800L
-    const val SHOWN = 6
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var users = 0
-
-    private val _stations = MutableStateFlow<List<RadioStation>>(emptyList())
-    val stations: StateFlow<List<RadioStation>> = _stations
-    private val _playing = MutableStateFlow<RadioStation?>(null)
-    val playing: StateFlow<RadioStation?> = _playing
-    /** The radio's band from its last broadcast: 0..2 FM1..FM3, 3 AM, -1 not heard yet. */
-    @Volatile private var band = -1
-
-    fun installed(context: Context): Boolean = isPackageInstalled(context, PACKAGE)
-
-    private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val freq = intent.getIntExtra("${UPDATE}_freq_key", 0).takeIf { it > 0 } ?: return
-            band = intent.getIntExtra("${UPDATE}_band_key", -1)
-            val name = intent.getStringExtra("${UPDATE}_name_key").orEmpty().trim()
-            _playing.value = RadioStation(freq, name.ifEmpty { names(context).getString(freq.toString(), null).orEmpty() })
-            // The radio keeps its station names to itself: remember the one it announces.
-            if (name.isNotEmpty() && band in 0 until AM_BAND && isFm(freq) && !intent.getBooleanExtra("${UPDATE}_searching_key", false)) learn(context, freq, name)
-        }
-    }
-
-    fun start(context: Context) {
-        val app = context.applicationContext
-        if (users++ == 0) ContextCompat.registerReceiver(app, receiver, IntentFilter(UPDATE), ContextCompat.RECEIVER_EXPORTED)
-        scope.launch { _stations.value = withContext(Dispatchers.IO) { read(app) } }
-        if (_playing.value == null) {
-            systemProperty("sys.qf.station_freq")?.toIntOrNull()?.takeIf { it > 0 }?.let { _playing.value = RadioStation(it, "") }
-        }
-    }
-
-    fun stop(context: Context) {
-        if (users == 0 || --users > 0) return
-        runCatching { context.applicationContext.unregisterReceiver(receiver) }
-    }
-
-    private fun names(context: Context) = context.applicationContext.getSharedPreferences("radio_names", Context.MODE_PRIVATE)
-
-    private fun learn(context: Context, freq: Int, name: String) {
-        val prefs = names(context)
-        if (prefs.getString(freq.toString(), null) == name) return
-        prefs.edit().putString(freq.toString(), name).apply()
-        _stations.value = _stations.value.map { if (it.freq == freq) it.copy(name = name) else it }
-    }
-
-    /** The stored stations, favourites and presets first, at most [SHOWN]. */
-    private fun read(context: Context): List<RadioStation> = runCatching {
-        val learned = names(context)
-        val out = ArrayList<Triple<RadioStation, Int, Boolean>>()
-        context.contentResolver.query(STATIONS, null, null, null, null)?.use { c ->
-            val f = c.getColumnIndex("frequency")
-            val n = c.getColumnIndex("station_name")
-            val ps = c.getColumnIndex("program_service")
-            val p = c.getColumnIndex("preset")
-            val fav = c.getColumnIndex("is_favorite")
-            while (c.moveToNext()) {
-                if (f < 0) break
-                // FM only, told by its frequency: the table's band numbers are not the broadcast's,
-                // and the AM presets (522 to 1620 kHz) showed as "5.2" to "16.2" and tuned AM.
-                val freq = c.getInt(f).takeIf { isFm(it) } ?: continue
-                val name = listOf(n, ps).firstNotNullOfOrNull { i -> if (i >= 0) c.getString(i)?.trim()?.takeIf { it.isNotEmpty() } else null }
-                    ?: learned.getString(freq.toString(), null).orEmpty()
-                out += Triple(RadioStation(freq, name), if (p >= 0) c.getInt(p) else 0, fav >= 0 && c.getInt(fav) != 0)
-            }
-        }
-        out.sortedWith(compareByDescending<Triple<RadioStation, Int, Boolean>> { it.third }.thenBy { if (it.second > 0) it.second else Int.MAX_VALUE })
-            .map { it.first }.distinctBy { it.freq }.take(SHOWN)
-    }.onFailure { Log.w(TAG, "stations unread: ${it.message}") }.getOrDefault(emptyList())
-
-    fun tune(context: Context, station: RadioStation) = command(context) { app ->
-        // The radio tunes the string on the band it is on ("10.0" became 999 kHz on AM):
-        // stepped to FM first, each step awaited in its own broadcast.
-        var steps = 0
-        while (band >= AM_BAND && steps++ < BAND_STEPS) {
-            val before = band
-            app.sendBroadcast(Intent(BAND))
-            withTimeoutOrNull(BAND_WAIT_MS) { while (band == before) delay(100) }
-        }
-        app.sendBroadcast(Intent(TUNE).putExtra(TUNE_EXTRA, station.mhz))
-        _playing.value = station
-    }
-
-    fun next(context: Context) = command(context) { it.sendBroadcast(Intent(NEXT)) }
-    fun previous(context: Context) = command(context) { it.sendBroadcast(Intent(PREVIOUS)) }
-
-    /** [send] once the radio's screen is alive: started first when it isn't, and the dashboard brought back over it. */
-    private fun command(context: Context, send: suspend (Context) -> Unit) {
-        val app = context.applicationContext
-        scope.launch {
-            if (systemProperty("sys.qf.radio.status") != "true") {
-                runCatching { app.startActivity(Intent().setComponent(ACTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    .onFailure { Log.w(TAG, "can't start the radio", it); return@launch }
-                delay(START_WAIT_MS)
-                send(app)
-                runCatching {
-                    app.startActivity(
-                        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(app.packageName)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    )
-                }
-            } else {
-                send(app)
-            }
-        }
-    }
-
-    private fun systemProperty(name: String): String? = SysProps.get(name)
-}
-
 @Composable
 internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    DisposableEffect(Unit) { RadioPresets.start(context); onDispose { RadioPresets.stop(context) } }
-    val stations by RadioPresets.stations.collectAsState()
-    val playing by RadioPresets.playing.collectAsState()
+    val radio = UnitPlatform.adapter.radio
+    DisposableEffect(radio) { radio?.start(context); onDispose { radio?.stop(context) } }
+    val stations by (radio?.stations ?: NO_STATIONS).collectAsState()
+    val playing by (radio?.playing ?: NO_STATION).collectAsState()
     val tap = rememberTapFeedback()
     Card(modifier = modifier) {
         Column(modifier = Modifier.fillMaxSize().padding(DashSpace.Md)) {
@@ -214,40 +84,93 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
                     color = DashColors.TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = { tap(); RadioPresets.previous(context) }, modifier = Modifier.size(DashSize.Touch)) {
+                IconButton(onClick = { tap(); radio?.previous(context) }, modifier = Modifier.size(DashSize.Touch)) {
                     Icon(Icons.Filled.SkipPrevious, contentDescription = stringResource(R.string.widgets_radio_previous), tint = DashColors.TextPrimary)
                 }
-                IconButton(onClick = { tap(); RadioPresets.next(context) }, modifier = Modifier.size(DashSize.Touch)) {
+                IconButton(onClick = { tap(); radio?.next(context) }, modifier = Modifier.size(DashSize.Touch)) {
                     Icon(Icons.Filled.SkipNext, contentDescription = stringResource(R.string.widgets_radio_next), tint = DashColors.TextPrimary)
                 }
             }
-            if (!RadioPresets.installed(context)) {
+            if (radio == null || !radio.installed(context)) {
                 Text(stringResource(R.string.widgets_radio_none), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 return@Column
             }
+            val addable = playing?.takeIf { radio.editable && canSaveStation(stations, it) }
             if (stations.isEmpty()) {
-                Text(stringResource(R.string.widgets_radio_empty), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                return@Column
+                Text(stringResource(radio.emptyTextRes), color = DashColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                if (addable == null) return@Column
             }
-            // Two rows of three: big enough for a finger at the wheel.
+            // Two rows of three: big enough for a finger at the wheel. The saved ones, then the "+" cell (null).
+            val cells: List<RadioStation?> = if (addable != null) stations + null else stations
             Column(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DashSpace.Sm)) {
-                stations.chunked(3).forEach { row ->
+                cells.chunked(3).forEach { row ->
                     Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DashSpace.Sm)) {
                         row.forEach { s ->
-                            val on = playing?.freq == s.freq
+                            if (s == null) {
+                                // Saves the station that is playing: outlined, so it doesn't read as a preset.
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight().clip(DashShape.Medium)
+                                        .border(1.dp, DashColors.Line, DashShape.Medium)
+                                        .combinedClickable(role = Role.Button, onClick = { tap(); radio.add(context, addable!!) }),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "+ " + addable!!.mhz, color = DashColors.TextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = DashSpace.Xs)
+                                    )
+                                }
+                                return@forEach
+                            }
+                            val freqs = s.freqs.ifEmpty { listOf(s.freq) }
+                            val on = playing?.freq in freqs
+                            // The frequency in use, else the one used last.
+                            val shown = playing?.freq?.takeIf { it in freqs } ?: s.freq
+                            val shownMhz = RadioStation(shown, "").mhz
+                            val mark = if (freqs.size > 1) (freqs.indexOf(shown) + 1).toString() + "/" + freqs.size else ""
+                            var menu by remember(freqs.first()) { mutableStateOf(false) }
+                            var renaming by remember(freqs.first()) { mutableStateOf(false) }
+                            var listing by remember(freqs.first()) { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier.weight(1f).fillMaxHeight().clip(DashShape.Medium)
                                     .background(if (on) DashColors.Accent.copy(alpha = 0.25f) else DashColors.CardHi)
-                                    .clickable(role = Role.Button) { tap(); RadioPresets.tune(context, s) },
+                                    .combinedClickable(
+                                        role = Role.Button,
+                                        onClick = { tap(); radio.tune(context, s) },
+                                        onLongClick = if (radio.editable) ({ tap(); menu = true }) else null
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 // The name when the radio has told us one, the frequency under it.
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = DashSpace.Xs)) {
                                     Text(
-                                        s.name.ifEmpty { s.mhz }, color = DashColors.TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
+                                        s.name.ifEmpty { shownMhz }, color = DashColors.TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
                                     )
-                                    if (s.name.isNotEmpty()) Text(s.mhz, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                    val small = listOf(if (s.name.isNotEmpty()) shownMhz else "", mark).filter { it.isNotEmpty() }.joinToString(" " + Char(183) + " ")
+                                    if (small.isNotEmpty()) Text(small, color = DashColors.TextSecondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                    // For comparing the same station on two frequencies; easy to drop later.
+                                    if (s.pi.isNotEmpty()) Text("PI " + s.pi, color = DashColors.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                }
+                                if (listing) FrequenciesDialog(freqs, onDone = { listing = false }, onRemove = { radio.removeFrequency(context, s, it) })
+                                if (renaming) RenameDialog(s, radio.ownName(s), onDone = { renaming = false }, onName = { radio.rename(context, s, it) })
+                                WindowMenu(
+                                    expanded = menu,
+                                    onDismissRequest = { menu = false },
+                                    containerColor = DashColors.Card.copy(alpha = 1f),
+                                    border = BorderStroke(1.dp, DashColors.Line)
+                                ) {
+                                    RadioMenuItem(stringResource(R.string.widgets_radio_remove)) {
+                                        menu = false
+                                        radio.remove(context, s)
+                                    }
+                                    RadioMenuItem(stringResource(R.string.widgets_radio_rename)) {
+                                        menu = false
+                                        renaming = true
+                                    }
+                                    RadioMenuItem(stringResource(R.string.widgets_radio_frequencies)) {
+                                        menu = false
+                                        listing = true
+                                    }
                                 }
                             }
                         }
@@ -259,11 +182,70 @@ internal fun RadioPresetsCard(modifier: Modifier = Modifier) {
     }
 }
 
+/** The frequencies of a station, each with a button that drops it; the last one dropped takes the station along. */
+@Composable
+private fun FrequenciesDialog(freqs: List<Int>, onDone: () -> Unit, onRemove: (Int) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDone,
+        containerColor = DashColors.Card,
+        title = { Text(stringResource(R.string.widgets_radio_frequencies), color = DashColors.TextPrimary) },
+        text = {
+            Column {
+                freqs.forEach { f ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(RadioStation(f, "").mhz + " MHz", color = DashColors.TextPrimary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { onRemove(f) }) { Text(stringResource(R.string.widgets_radio_remove), color = DashColors.Muted) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDone) { Text(stringResource(android.R.string.ok), color = DashColors.TextPrimary) } }
+    )
+}
+
+/** Asks for the name of [s]: prefilled, focused with the keyboard up; OK with nothing typed clears the name. */
+@Composable
+private fun RenameDialog(s: RadioStation, own: String, onDone: () -> Unit, onName: (String) -> Unit) {
+    var text by remember { mutableStateOf(own) }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun save() { onName(text); onDone() }
+    LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }
+    AlertDialog(
+        onDismissRequest = onDone,
+        containerColor = DashColors.Card,
+        title = { Text(s.mhz + " MHz", color = DashColors.TextPrimary) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.filterNot { c -> c in NAME_BREAKS }.take(FmStations.MAX_NAME) },
+                singleLine = true,
+                label = { Text(stringResource(R.string.widgets_radio_rename)) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { save() }),
+                modifier = Modifier.focusRequester(focus)
+            )
+        },
+        confirmButton = { TextButton(onClick = { save() }) { Text(stringResource(android.R.string.ok), color = DashColors.TextPrimary) } },
+        dismissButton = { TextButton(onClick = onDone) { Text(stringResource(android.R.string.cancel), color = DashColors.Muted) } }
+    )
+}
+
+@Composable
+private fun RadioMenuItem(text: String, onClick: () -> Unit) {
+    DropdownMenuItem(
+        modifier = Modifier.heightIn(min = DashSize.MenuRow),
+        text = { Text(text, color = DashColors.TextPrimary, style = MaterialTheme.typography.bodyLarge) },
+        onClick = onClick
+    )
+}
+
 @Composable
 internal fun radioPresetsFace(): WidgetFace {
     val context = LocalContext.current
-    DisposableEffect(Unit) { RadioPresets.start(context); onDispose { RadioPresets.stop(context) } }
-    val playing by RadioPresets.playing.collectAsState()
+    val radio = UnitPlatform.adapter.radio
+    DisposableEffect(radio) { radio?.start(context); onDispose { radio?.stop(context) } }
+    val playing by (radio?.playing ?: NO_STATION).collectAsState()
     return WidgetFace(
         icon = Icons.Filled.Radio,
         title = BuiltinKind.RADIO_PRESETS.label,
@@ -271,8 +253,16 @@ internal fun radioPresetsFace(): WidgetFace {
         unit = if (playing != null) "MHz" else "",
         caption = playing?.name.orEmpty(),
         actions = listOf(
-            FaceAction(Icons.Filled.SkipPrevious, stringResource(R.string.widgets_radio_previous), onClick = { RadioPresets.previous(context) }),
-            FaceAction(Icons.Filled.SkipNext, stringResource(R.string.widgets_radio_next), onClick = { RadioPresets.next(context) })
+            FaceAction(Icons.Filled.SkipPrevious, stringResource(R.string.widgets_radio_previous), onClick = { radio?.previous(context) }),
+            FaceAction(Icons.Filled.SkipNext, stringResource(R.string.widgets_radio_next), onClick = { radio?.next(context) })
         )
     )
 }
+
+/** Whether the "+" cell shows: [playing] is a station that isn't among [saved] yet, and the tile has room for one more. */
+internal fun canSaveStation(saved: List<RadioStation>, playing: RadioStation?): Boolean =
+    playing != null && saved.none { playing.freq in it.freqs.ifEmpty { listOf(it.freq) } } &&
+        (saved.size < StockRadio.SHOWN || (playing.pi.isNotEmpty() && saved.any { it.pi == playing.pi }))
+
+/** Characters a name can't hold (the stored format is one tab-separated line per station). */
+private val NAME_BREAKS = setOf(Char(10), Char(13), Char(9))
