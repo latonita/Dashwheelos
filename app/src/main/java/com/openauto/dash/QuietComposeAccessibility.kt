@@ -58,7 +58,7 @@ internal object ComposeA11yQuiet {
     fun apply(view: View, am: AccessibilityManager) {
         if (!shouldQuiet(am.isTouchExplorationEnabled)) return
         runCatching {
-            val host = generateSequence(view.javaClass) { it.superclass }.firstOrNull { it.name == VIEW_CLASS } ?: return
+            val host = generateSequence<Class<*>>(view.javaClass) { it.superclass }.firstOrNull { it.name == VIEW_CLASS } ?: return
             val delegate = host.getDeclaredField("composeAccessibilityDelegate").apply { isAccessible = true }.get(view) ?: return
             delegate.javaClass.getDeclaredField("enabledServices").apply { isAccessible = true }.set(delegate, emptyList<Any>())
         }.onFailure {
