@@ -1,6 +1,7 @@
 package com.openauto.dash.unit.xyauto
 
 import com.openauto.dash.McuReader
+import com.openauto.dash.SpeedCorrection
 import com.openauto.dash.Tyre
 import com.openauto.dash.UnitBus
 import com.openauto.dash.TyrePos
@@ -8,6 +9,7 @@ import com.openauto.dash.unitBusOutsideTemp
 import com.openauto.dash.unitBusRpm
 import com.openauto.dash.unitBusSpeed
 import com.openauto.dash.unitBusVolts
+import com.openauto.dash.vehicle.FUEL_HOLD_MS
 import com.openauto.dash.vehicle.Gear
 import com.openauto.dash.vehicle.K
 import com.openauto.dash.vehicle.Publisher
@@ -26,7 +28,11 @@ import com.openauto.unitproto.canbox.TyreReading
  * Every value has a key. Speed and revs live [com.openauto.dash.UnitBus.SAY_HOLD_MS] (the box repeats each frame
  * within about 10 s even when nothing changes); the other measurements keep their key's own time, which is longer.
  */
-internal class XyautoBusPublisher(private val out: Publisher) {
+internal class XyautoBusPublisher(
+    private val out: Publisher,
+    /** The driver's speed correction, as K.VEHICLE_SPEED gets it; the consumption divides by the same figure. */
+    private val correctSpeed: (Int) -> Int = SpeedCorrection::corrected
+) {
 
     /** The wheels with a pressure; a wheel the box has none for is not in it. */
     private val tyres = HashMap<TyrePos, Tyre>()
@@ -41,7 +47,7 @@ internal class XyautoBusPublisher(private val out: Publisher) {
         when (v) {
             is CanboxValue.SpeedKmh -> {
                 unitBusSpeed(out, v.kmh?.toFloat())
-                speedKmh = v.kmh?.toFloat()
+                speedKmh = v.kmh?.let(correctSpeed)?.toFloat()
                 consumption()
             }
             is CanboxValue.Rpm -> unitBusRpm(out, v.rpm)
@@ -51,11 +57,13 @@ internal class XyautoBusPublisher(private val out: Publisher) {
             is CanboxValue.IntakeAirC -> out.put(K.INTAKE_TEMP, v.celsius?.toDouble())
             is CanboxValue.OutsideTempC -> unitBusOutsideTemp(out, v.celsius)
             is CanboxValue.BatteryVolts -> v.volts?.let { unitBusVolts(out, it) } ?: out.put(K.BATTERY_VOLTS, null)
+            // The tank says these on a change and a parked car says nothing: the level, litres and range stay for
+            // [FUEL_HOLD_MS] like every other car-fed fuel provider (the key's 2 minutes blanked the tile after a stop).
             // The percentage comes only from the box's percentage (0xB4), the litres only from the litres (0xB8):
             // one writer each, and no guess at a tank size.
-            is CanboxValue.FuelLevelPct -> out.put(K.FUEL_LEVEL, v.pct?.toDouble())
-            is CanboxValue.FuelLitres -> out.put(K.FUEL_LITRES, v.litres)
-            is CanboxValue.RangeKm -> out.put(K.RANGE, v.km?.toDouble())
+            is CanboxValue.FuelLevelPct -> out.put(K.FUEL_LEVEL, v.pct?.toDouble(), ttlMs = FUEL_HOLD_MS)
+            is CanboxValue.FuelLitres -> out.put(K.FUEL_LITRES, v.litres, ttlMs = FUEL_HOLD_MS)
+            is CanboxValue.RangeKm -> out.put(K.RANGE, v.km?.toDouble(), ttlMs = FUEL_HOLD_MS)
             // The box repeats an unchanged flow only about every 11.5 s, so the key's 5 s would drop a steady reading;
             // the box withdraws it itself (0xFFFF) within about a second of the engine or bus stopping.
             is CanboxValue.FuelFlowLph -> {

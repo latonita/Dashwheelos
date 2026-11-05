@@ -196,6 +196,27 @@ class XyautoBusPublisherTest {
     }
 
     @Test
+    fun consumption_usesTheCorrectedSpeedLikeTheSpeedKey() {
+        val corrected = XyautoBusPublisher(out, correctSpeed = { it + 5 })
+        corrected.apply(listOf(CanboxValue.FuelFlowLph(6.0), CanboxValue.SpeedKmh(75)))
+        assertEquals(7.5, read(K.FUEL_CONSUMPTION)!!, 1e-9)   // 6 / 80 * 100, not 6 / 75 * 100
+    }
+
+    @Test
+    fun fuelLevelLitresAndRangeStaySixHours() {
+        apply(CanboxValue.FuelLevelPct(63), CanboxValue.FuelLitres(48.9), CanboxValue.RangeKm(410))
+        t += 3 * 3_600_000L
+        bus.expireNow()
+        assertEquals(63.0, read(K.FUEL_LEVEL)!!, 0.0)
+        assertEquals(48.9, read(K.FUEL_LITRES)!!, 0.0)
+        assertEquals(410.0, read(K.RANGE)!!, 0.0)
+        t += 3 * 3_600_000L + 1_000
+        bus.expireNow()
+        assertNull(read(K.FUEL_LEVEL))
+        assertNull(read(K.FUEL_LITRES))
+    }
+
+    @Test
     fun consumption_zeroFlowIsZero() {
         apply(CanboxValue.SpeedKmh(90), CanboxValue.FuelFlowLph(0.0))
         assertEquals(0.0, read(K.FUEL_CONSUMPTION)!!, 0.0)
