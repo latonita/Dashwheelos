@@ -10,4 +10,6 @@
     <string name="look_home_own">Со своим главным экраном</string>
     <string name="look_home_own_off">Есть свой главный экран. Расстановка выключена.</string>
     <string name="look_home_keeps">Главный экран не меняется</string>
+    <string name="dash_transparent_title">Прозрачные панели</string>
+    <string name="dash_transparent_hint">Без панели за плитками, как в облике «Floating»</string>
 </resources>

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Schedule
@@ -202,6 +203,13 @@ internal fun EffectsSetting(theme: ThemeState) {
         onChoose = theme.onEffects
     )
     SwitchHint(stringResource(theme.effects.hintRes))
+    if (DashColors.Skin == DashSkin.STANDARD) {
+        Spacer(Modifier.height(8.dp))
+        SettingsToggle(
+            Icons.Filled.Layers, stringResource(R.string.dash_transparent_title), stringResource(R.string.dash_transparent_hint),
+            checked = theme.transparentPanels, onChange = theme.onTransparentPanels
+        )
+    }
 }
 
 /**

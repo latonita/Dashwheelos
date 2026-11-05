@@ -100,5 +100,6 @@ private fun ClusterThemeSync() {
     val mode = androidx.compose.runtime.remember { DashThemeStore.load(context) }
     val appearance = androidx.compose.runtime.remember { DashThemeStore.loadAppearance(context) }
     val effects = androidx.compose.runtime.remember { DashThemeStore.loadEffects(context) }
-    DashColors.Sync(mode, appearance, effects)
+    val transparent = androidx.compose.runtime.remember { DashThemeStore.loadTransparentPanels(context) }
+    DashColors.Sync(mode, appearance, effects, transparent)
 }

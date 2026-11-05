@@ -782,7 +782,7 @@ internal fun TileContent(
         is DashboardItem.SystemWidget -> if (editing) {
             EditPlaceholder(icon = Icons.Filled.Widgets, label = stringResource(R.string.dash_app_widget))
         } else Card(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().then(if (DashColors.TransparentPanels) Modifier.clip(DashShape.Large) else Modifier)
         ) {
             HostedSystemWidget(appWidgetId = item.appWidgetId, modifier = Modifier.fillMaxSize())
         }
@@ -797,7 +797,9 @@ internal fun TileContent(
 @Composable
 private fun SkinFallback(kind: BuiltinKind, content: @Composable () -> Unit) {
     if (DashColors.Skin == DashSkin.STANDARD || !DashColors.Bare || kind in FRAMED_KINDS || kind == BuiltinKind.DASH_BAR || kind in SKINNED_KINDS) {
-        content()
+        // Transparent panels leave no panel edge to round a live view that fills its tile: clip it.
+        if (DashColors.TransparentPanels && kind in FRAMED_KINDS) Box(Modifier.fillMaxSize().clip(DashShape.Large)) { content() }
+        else content()
         return
     }
     SkinFallbackPanel(content)

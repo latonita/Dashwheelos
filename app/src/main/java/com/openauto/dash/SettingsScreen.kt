@@ -216,6 +216,9 @@ internal data class ThemeState(
     val onMode: (DashThemeMode) -> Unit,
     val onAppearance: (DashAppearance) -> Unit,
     val onEffects: (DashEffects) -> Unit,
+    /** No panel behind tiles on the standard look (Look); the skins are bare already. */
+    val transparentPanels: Boolean = false,
+    val onTransparentPanels: (Boolean) -> Unit = {},
     /** The bottom bar hides itself when unused, after [barHideSeconds] (BarAutoHide.kt). */
     val barAutoHide: Boolean,
     val barHideSeconds: Int,

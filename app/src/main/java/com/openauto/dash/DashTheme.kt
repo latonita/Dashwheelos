@@ -539,6 +539,7 @@ object DashThemeStore {
     private const val KEY_RAIL = "side_rail"
     private const val KEY_LOOK_LAYOUT = "look_layout"
     private const val KEY_TABS = "tabs_instead_of_swiping"
+    private const val KEY_TRANSPARENT = "transparent_panels"
 
     /** Seconds the bottom bar waits before hiding, until the driver picks another delay. */
     const val DEFAULT_BAR_HIDE_SECONDS = 5
@@ -653,6 +654,14 @@ object DashThemeStore {
     /** Whether the rail shows: the choice made, else the theme's own habit. */
     fun railOn(choice: Boolean?, mode: DashThemeMode): Boolean = choice ?: (mode == DashThemeMode.CANVAS || mode == DashThemeMode.TERRAIN)
 
+    /** No panel behind the tiles on any look (Settings, Look), as the bare looks draw them; off by default. */
+    fun loadTransparentPanels(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_TRANSPARENT, false)
+
+    fun saveTransparentPanels(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_TRANSPARENT, on).apply()
+    }
+
     /** Tabs in the rail instead of swiping, asked for; off by default (a map app under the dashboards turns them on by itself). */
     fun loadTabs(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_TABS, false)
@@ -727,6 +736,8 @@ object DashColors {
     private var current by mutableStateOf(AutoDarkPalette)
     // Not "effects": its getter would clash with the public Effects accessor on the JVM.
     private var effectsLevel by mutableStateOf(DashEffects.FULL)
+    /** The "Transparent panels" setting: every look is drawn bare (no panel behind tiles). */
+    private var transparentOverride by mutableStateOf(false)
 
     /**
      * Follows the chosen theme, fading the colours over [FADE_MS] so a day /
@@ -734,9 +745,10 @@ object DashColors {
      * knobs (glass, skin, bare) change at once; only colours and the glow blend.
      */
     @Composable
-    fun Sync(mode: DashThemeMode, appearance: DashAppearance, effects: DashEffects = DashEffects.FULL) {
+    fun Sync(mode: DashThemeMode, appearance: DashAppearance, effects: DashEffects = DashEffects.FULL, transparentPanels: Boolean = false) {
         val target = paletteFor(mode, appearance.isLight())
         if (effectsLevel != effects) effectsLevel = effects
+        if (transparentOverride != transparentPanels) transparentOverride = transparentPanels
         val fade = remember { Animatable(1f) }
         var from by remember { mutableStateOf(target) }
         var to by remember { mutableStateOf(target) }
@@ -808,12 +820,14 @@ object DashColors {
     val TextSecondary get() = current.TextSecondary
     val Line get() = current.Line
     /** Translucent panels, unless the effects are off: then every theme gets opaque cards. */
-    val Glass get() = current.Glass && effectsLevel != DashEffects.NONE
+    val Glass get() = current.Glass && !transparentOverride && effectsLevel != DashEffects.NONE
     /** The theme's halo strength, scaled by the effects setting (0 with effects off). */
     val Glow get() = current.Glow * effectsLevel.scale
     val Effects get() = effectsLevel
     val Original get() = current.Original
-    val Bare get() = current.Bare
+    val Bare get() = current.Bare || transparentOverride
+    /** True while "Transparent panels" forces the bare drawing on a look that has panels. */
+    val TransparentPanels get() = transparentOverride
     val BackgroundStops get() = current.BackgroundStops
     val Skin get() = current.Skin
     val Light get() = current.Light
