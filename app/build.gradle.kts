@@ -167,6 +167,22 @@ composeCompiler {
     }
 }
 
+// The map SDK is held at 10.x against the navigation SDK's wishes.
+//
+// Both navigation modules ask for android-sdk 11.8.1, and Gradle's default
+// answer to two versions is the higher one — so a plain dependency on 10.3.7 is
+// quietly upgraded back to 11.8.1 and the ES 2.0 units lose the map again, with
+// nothing in the build log to say so. Only force() settles it.
+//
+// This is safe because of what the navigation SDK actually touches: of its own
+// classes, only MapLibreLocationEngine reaches into the map SDK (five classes in
+// org.maplibre.android.location.engine), and this app substitutes its own engine
+// so that class is never loaded. Everything else it uses from the map SDK lives
+// in navigation-ui, which is likewise confined to ManeuverView here.
+configurations.configureEach {
+    resolutionStrategy.force("org.maplibre.gl:android-sdk:10.3.7")
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
 
@@ -205,20 +221,43 @@ dependencies {
     "githubImplementation"("dev.rikka.shizuku:api:13.1.5")
     "githubImplementation"("dev.rikka.shizuku:provider:13.1.5")
     // MapLibre GL — free/open-source map (OpenFreeMap style, no token/API key).
-    // Exclude its bundled GeoJSON/Turf so the navigation SDK's newer 7.x ones
-    // provide those classes (otherwise duplicate-class build failure).
+    //
+    // Pinned to the 10.x line, and it has to stay there. MapLibre 11.0.0 moved
+    // the renderer to OpenGL ES 3.0, and the head units this app is for top out
+    // at ES 2.0 (Mali-450 on the AC8227L boards, which report
+    // ro.opengles.version = 0x20000): on those, 11.x finds no matching EGL
+    // config, hands eglCreateContext a null, and takes the app down from its own
+    // render thread. There is no fallback to ask for — 11.x deleted the ES 2.0
+    // backend outright (MLN_LEGACY_RENDERER is a fatal error in its CMake).
+    // 10.3.7 is the last release of that line, and still maintained.
+    //
+    // 11.0.0 is also where the packages were renamed, so 10.x is
+    // com.mapbox.mapboxsdk.*, not org.maplibre.android.* (MapLibrePanel.kt).
     // Filament: the driver's own car live in 3D on the Car problems card (Car3D.kt),
     // drawn only while it moves.
     implementation("com.google.android.filament:filament-android:1.71.5")
     implementation("com.google.android.filament:gltfio-android:1.71.5")
     implementation("com.google.android.filament:filament-utils-android:1.71.5")
-    implementation("org.maplibre.gl:android-sdk:11.11.0") {
-        exclude(group = "org.maplibre.gl", module = "android-sdk-geojson")
-        exclude(group = "org.maplibre.gl", module = "android-sdk-turf")
-    }
+    implementation("org.maplibre.gl:android-sdk:10.3.7")
     // MapLibre Navigation — free turn-by-turn (routing via a free Valhalla server).
+    //
+    // Stays on 5.x even though the map SDK went back to 10.x. navigation-core
+    // touches the map SDK in exactly one class, MapLibreLocationEngine, which
+    // this app does not use: InAppNav supplies its own engine over the
+    // dashboard's existing location feed (FeedLocationEngine.kt), so that class is
+    // never loaded and the routing, milestones and off-route detection around it
+    // run untouched.
+    //
+    // navigation-ui IS bound to the map SDK, deeply, so nothing of it may be used
+    // but ManeuverView — a plain Canvas view that draws the turn arrow and
+    // references no map class at all. The route line is drawn by our own
+    // RouteLine.kt instead of its NavigationMapRoute.
     implementation("org.maplibre.navigation:navigation-core:5.0.0-pre8")
-    implementation("org.maplibre.navigation:navigation-ui-android:5.0.0-pre8")
+    implementation("org.maplibre.navigation:navigation-ui-android:5.0.0-pre8") {
+        // This and the map SDK's own geojson both carry com.mapbox.geojson.*.
+        // Keep the map SDK's: its GeoJsonSource is compiled against that one.
+        exclude(group = "com.mapbox.mapboxsdk", module = "mapbox-sdk-geojson")
+    }
     // HTTP + JSON for the free routing/geocoding requests.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // TLS 1.3 for an Android that has none (ModernTls.kt). The routing and

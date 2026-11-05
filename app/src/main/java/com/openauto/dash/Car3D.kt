@@ -112,7 +112,15 @@ internal object Car3D {
     private val letGo = Runnable { destroy() }
     private var inited = false
 
-    val supported: Boolean get() = !isEmulator
+    /**
+     * Not on emulators, and not on a GPU that only does OpenGL ES 2.0 (ro.opengles.version, hex
+     * 0x20000 on the Mali-450 head units): Filament wants ES 3.0, and a failed Engine.create is a
+     * native abort that no try/catch sees. Unset: assumed capable.
+     */
+    val supported: Boolean by lazy {
+        val gl = SysProps.getOrNull("ro.opengles.version")?.toIntOrNull()
+        !isEmulator && (gl == null || gl >= 0x30000)
+    }
 
     /** The model's box (glTF space: nose +x, up +y, the car's right +z). */
     var lo = FloatArray(3); private set
