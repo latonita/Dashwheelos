@@ -57,7 +57,8 @@ object UnitBus {
         )
         source.start(context, WatchedPublisher(publisher, live)) { key, value ->
             live.heard()
-            SignalSources.busValue(key, value)
+            // An empty value only says the bus spoke (a source skips the text when nobody reads it).
+            if (value.isNotEmpty()) SignalSources.busValue(key, value)
         }
         // A feed that is lost says nothing more: its values go at once, not after the silence.
         scope.launch { source.listening.collect { if (!it) live.stopped() } }

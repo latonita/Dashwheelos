@@ -66,6 +66,7 @@ interface IgnitionSource {
  * to false: either way everything it put is withdrawn and the source goes down, back up with its next word.
  */
 interface VehicleBusSource {
+    /** [raw] gets each frame's key and value as text; an empty value only says the bus spoke. */
     fun start(context: Context, publisher: Publisher, raw: (key: String, value: String) -> Unit)
     fun stop()
     val listening: StateFlow<Boolean>
