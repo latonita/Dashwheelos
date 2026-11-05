@@ -368,7 +368,7 @@ internal class AlertWindow(
      * call while reversing. Such a window needs no "display over other apps".
      */
     private val aboveCamera: () -> Boolean = { false },
-    /** The panel and full-screen designs stop above the dashboard's bar, so its buttons stay in reach. */
+    /** The panel and full-screen designs stop short of the dashboard's bar (above it, or under it with the bar on top), so its buttons stay in reach. */
     private val clearOfBar: Boolean = false,
     /** Where it stands among the alerts up at once ([AlertKind.rank]); the reverse view is ahead of them all. */
     val rank: Int = -1,
@@ -481,8 +481,12 @@ internal class AlertWindow(
         val match = WindowManager.LayoutParams.MATCH_PARENT
         val panel = (panelWidthDp((dm.widthPixels / dm.density).toInt()).value * dm.density).toInt()
         // The bar's height, its glass margin under it included (TopBar).
-        val aboveBar = dm.heightPixels - ((DashSize.Bar.value + 10f) * dm.density).toInt()
-        // The side panel and full screen start under the status bar: laid out in screen, their title sat on its icons.
+        val barPx = ((DashSize.Bar.value + 10f) * dm.density).toInt()
+        val aboveBar = dm.heightPixels - barPx
+        // With the bar on top the two designs start under it instead.
+        val underBar = if (clearOfBar && BarPosition.shown() == BarPosition.TOP) barPx else 0
+        // The side panel starts under the status bar: laid out in screen, its title sat on the
+        // bar's icons. The full screen follows the bar itself instead (show).
         val underStatus = statusBarHeight()
         val tall = (if (clearOfBar) aboveBar else dm.heightPixels) - underStatus
         val (w, h) = when (style) {
@@ -515,7 +519,8 @@ internal class AlertWindow(
                     }
                 }
                 AlertStyle.PILL -> y = maxOf(margin / 2, underStatus)
-                AlertStyle.PANEL, AlertStyle.FULL -> y = underStatus
+                AlertStyle.PANEL -> y = underStatus + underBar
+                AlertStyle.FULL -> y = underBar
                 else -> Unit
             }
             title = "Dashwheel $name"

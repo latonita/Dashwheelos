@@ -815,12 +815,13 @@ private fun LookPane(theme: ThemeState) {
     LookLightAndEffects(theme)
 }
 
-/** The dashboard around the tiles: the bottom bar, its readouts, the side rail and tabs, Moments. */
+/** The dashboard around the tiles: the bar, its readouts, the side rail and tabs, Moments. */
 @Composable
 private fun DashboardPane(m: TopBarModel, theme: ThemeState) {
-    // One "Bottom bar": its auto-hide, its size, then its readouts under the same heading.
+    // One "Bar": its auto-hide, its size, its place, then its readouts under the same heading.
     BarAutoHideSetting(theme)
     BarSizeSetting()
+    BarPositionSetting()
     BarItemsSetting()
     Spacer(Modifier.height(20.dp))
     NavigationSetting(theme)
@@ -862,8 +863,8 @@ private fun UnitsSheet(onDismiss: () -> Unit) {
 }
 
 /**
- * The bottom bar's settings on their own, from a long press on the bar: its
- * hiding, its readouts and the side rail. The same rows as Settings, Look.
+ * The bar's settings on their own, from a long press on the bar: its
+ * hiding, its place, its readouts and the side rail. The same rows as Settings, Look.
  */
 @Composable
 internal fun BarSettingsSheet(theme: ThemeState, onDismiss: () -> Unit) {
@@ -875,6 +876,7 @@ internal fun BarSettingsSheet(theme: ThemeState, onDismiss: () -> Unit) {
         Column {
             BarAutoHideSetting(theme)
             BarSizeSetting()
+            BarPositionSetting()
             BarItemsSetting()
             Spacer(Modifier.height(20.dp))
             NavigationSetting(theme)

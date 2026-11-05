@@ -113,13 +113,19 @@
     <string name="dash_effects_none_hint">Neskaidrios kortelės, paprasti skaičiai, be švytėjimo: matosi ir ryškioje saulėje</string>
     <string name="dash_effects_reduced_hint">Švelnesnis švytėjimas, stiklas lieka</string>
     <string name="dash_effects_full_hint">Kiekviena išvaizda su visu švytėjimu ir stiklu</string>
-    <string name="dash_bar_title">Apatinė juosta</string>
+    <string name="dash_bar_title">Juosta</string>
     <string name="dash_bar_auto_hide">Automatiškai slėpti juostą</string>
     <string name="dash_bar_auto_hide_detail">Pasislepia, kai nenaudojama, kad skydeliams liktų daugiau vietos</string>
     <string name="dash_bar_hide_after">Slėpti po %1$d s</string>
     <string name="dash_bar_hide_now">Slėpti iškart</string>
     <string name="dash_bar_swipe_up_detail">Kai paslėpta, perbraukite aukštyn nuo apatinio krašto, kad ją grąžintumėte</string>
     <string name="dash_bar_swipe_up_hint">Perbraukite aukštyn juostai</string>
+    <string name="dash_bar_swipe_down_detail">Kai paslėpta, perbraukite žemyn nuo viršutinio krašto, kad ją grąžintumėte</string>
+    <string name="dash_bar_swipe_down_hint">Perbraukite žemyn juostai</string>
+    <string name="dash_bar_position">Vieta</string>
+    <string name="dash_bar_position_bottom">Apačioje</string>
+    <string name="dash_bar_position_top">Viršuje</string>
+    <string name="dash_bar_position_skin">Tik standartinis stilius gali juostą rodyti viršuje; kiti stiliai savo juostą laiko apačioje.</string>
     <string name="dash_bar_show">Rodyti juostą</string>
 
     <!-- Moving: edits wait until the car has stopped -->

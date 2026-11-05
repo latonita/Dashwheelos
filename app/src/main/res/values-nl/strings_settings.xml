@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Terugzetten</string>
     <string name="settings_resume_music">Muziek hervatten bij het starten</string>
     <string name="settings_resume_music_detail">De app die speelde bij het uitzetten speelt verder. Laat uit als het apparaat dat al doet.</string>
-    <string name="bar_items_title">Onderbalk</string>
+    <string name="bar_items_title">Balk</string>
     <string name="bar_items_custom">Kies wat de balk toont</string>
     <string name="bar_items_theme">Uit: de balk van het thema</string>
     <string name="bar_items_skin">De weergaven verschijnen alleen met de standaardbalk, niet met een skin.</string>

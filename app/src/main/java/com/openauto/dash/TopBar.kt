@@ -190,19 +190,22 @@ internal fun TopBar(m: TopBarModel) {
  * OBD link pill and a ⋮ menu on the right. Set-and-forget controls (theme,
  * system install, edit) live in the menu; battery and coolant only appear, as
  * warning pills, when a reading is out of range. The buttons are
- * [DashSize.Bar] tall and reach the screen's bottom edge.
+ * [DashSize.Bar] tall and reach the screen's edge the bar stands on, the
+ * bottom one or, as the driver chose (BarPosition.kt), the top one.
  */
 @Composable
 internal fun StandardTopBar(m: TopBarModel) {
     // Glass themes float the bar as its own panel over the gradient background;
     // solid themes keep the flat full-width strip.
     val glass = DashColors.Glass
+    val onTop = rememberBarPosition() == BarPosition.TOP
     Surface(color = if (glass) Color.Transparent else DashColors.Bar, modifier = Modifier.fillMaxWidth()) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (glass) Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp).then(glassPanel(DashShape.Large))
+                    // The panel's gap to the screen's edge is on the bar's own side.
+                    if (glass) Modifier.padding(start = 12.dp, end = 12.dp, top = if (onTop) 10.dp else 0.dp, bottom = if (onTop) 0.dp else 10.dp).then(glassPanel(DashShape.Large))
                     else Modifier
                 )
                 .padding(horizontal = 6.dp)
@@ -995,8 +998,10 @@ private fun UpdateDotHint() {
         show = false
     }
     val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
-    // Above the button, its end on the button's end, kept inside the window.
-    val above = remember(gap) {
+    // Away from the edge the bar stands on (above the button for the bottom bar, under it for the top one),
+    // its end on the button's end, kept inside the window.
+    val position = rememberBarPosition()
+    val above = remember(gap, position) {
         object : androidx.compose.ui.window.PopupPositionProvider {
             override fun calculatePosition(
                 anchorBounds: androidx.compose.ui.unit.IntRect,
@@ -1005,7 +1010,7 @@ private fun UpdateDotHint() {
                 popupContentSize: androidx.compose.ui.unit.IntSize
             ): androidx.compose.ui.unit.IntOffset {
                 val x = (anchorBounds.right - popupContentSize.width).coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
-                val y = (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0)
+                val y = hintTop(position, anchorBounds.top, anchorBounds.bottom, popupContentSize.height, gap, windowSize.height)
                 return androidx.compose.ui.unit.IntOffset(x, y)
             }
         }

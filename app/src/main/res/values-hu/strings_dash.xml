@@ -113,13 +113,19 @@
     <string name="dash_effects_none_hint">Átlátszatlan kártyák, egyszerű számok, ragyogás nélkül: tűző napon is olvasható</string>
     <string name="dash_effects_reduced_hint">Lágyabb ragyogás, az üveg marad</string>
     <string name="dash_effects_full_hint">Minden téma teljes ragyogással és üveggel</string>
-    <string name="dash_bar_title">Alsó sáv</string>
+    <string name="dash_bar_title">Sáv</string>
     <string name="dash_bar_auto_hide">A sáv automatikus elrejtése</string>
     <string name="dash_bar_auto_hide_detail">Használaton kívül eltűnik, hogy több hely jusson a műszerfalaknak</string>
     <string name="dash_bar_hide_after">Elrejtés %1$d mp után</string>
     <string name="dash_bar_hide_now">Azonnali elrejtés</string>
     <string name="dash_bar_swipe_up_detail">Ha rejtve van, az alsó széltől felfelé húzva hozhatja vissza</string>
     <string name="dash_bar_swipe_up_hint">Húzza felfelé a sávért</string>
+    <string name="dash_bar_swipe_down_detail">Ha rejtve van, a felső széltől lefelé húzva hozhatja vissza</string>
+    <string name="dash_bar_swipe_down_hint">Húzza lefelé a sávért</string>
+    <string name="dash_bar_position">Elhelyezés</string>
+    <string name="dash_bar_position_bottom">Lent</string>
+    <string name="dash_bar_position_top">Fent</string>
+    <string name="dash_bar_position_skin">Csak a szabványos megjelenés teheti a sávot felülre; a skinek a saját sávjukat lent tartják.</string>
     <string name="dash_bar_show">A sáv megjelenítése</string>
 
     <!-- Moving: edits wait until the car has stopped -->

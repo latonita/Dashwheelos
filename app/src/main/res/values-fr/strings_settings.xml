@@ -161,7 +161,7 @@
     <string name="settings_backup_confirm">Restaurer</string>
     <string name="settings_resume_music">Reprendre la musique au démarrage</string>
     <string name="settings_resume_music_detail">L\'appli qui jouait à l\'arrêt reprend. Laissez désactivé si l\'autoradio le fait déjà.</string>
-    <string name="bar_items_title">Barre du bas</string>
+    <string name="bar_items_title">Barre</string>
     <string name="bar_items_custom">Choisir ce que montre la barre</string>
     <string name="bar_items_theme">Désactivé : la barre du thème</string>
     <string name="bar_items_skin">Les indicateurs ne s\'affichent qu\'avec la barre standard, pas avec un skin.</string>
