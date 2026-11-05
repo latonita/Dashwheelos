@@ -156,6 +156,11 @@
     <string name="design_volume_knob_desc">Un bouton moleté avec une échelle lumineuse.</string>
     <string name="design_level_meter">VU-mètre</string>
     <string name="design_level_meter_desc">Des colonnes de LED qui bougent avec le niveau.</string>
+    <string name="design_elevation">Altitude</string>
+    <string name="design_elevation_desc">Hauteur de la route sur les 100 derniers km, avec l’altitude actuelle.</string>
+    <string name="design_elevation_span">Derniers %1$s</string>
+    <string name="design_elevation_span_part">Derniers %1$s sur %2$s</string>
+    <string name="design_elevation_hint">Roulez un kilomètre pour tracer le profil</string>
     <string name="design_filter_cells">Cellules du filtre</string>
     <string name="design_filter_cells_desc">Le nid d\'abeille du FAP ; la suie remplit une cellule par trajet court.</string>
     <string name="design_hourglass">Sablier</string>

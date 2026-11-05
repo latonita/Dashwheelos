@@ -158,6 +158,11 @@
     <string name="design_volume_knob_desc">Рифлёная поворотная ручка с подсвеченной шкалой.</string>
     <string name="design_level_meter">Индикатор уровня</string>
     <string name="design_level_meter_desc">Столбики светодиодов прыгают вместе с уровнем.</string>
+    <string name="design_elevation">Высота</string>
+    <string name="design_elevation_desc">Высота дороги за последние 100 км и текущая высота.</string>
+    <string name="design_elevation_span">Последние %1$s</string>
+    <string name="design_elevation_span_part">Последние %1$s из %2$s</string>
+    <string name="design_elevation_hint">Проедьте километр, чтобы построить профиль</string>
     <string name="design_filter_cells">Соты фильтра</string>
     <string name="design_filter_cells_desc">Соты сажевого фильтра: сажа заполняет ячейку за каждую короткую поездку.</string>
     <string name="design_hourglass">Песочные часы</string>

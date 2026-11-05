@@ -113,6 +113,7 @@ enum class WidgetDesign(
     COVER_ART(R.string.design_cover_art, R.string.design_cover_art_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.MEDIA)),
     VOLUME_KNOB(R.string.design_volume_knob, R.string.design_volume_knob_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.AUDIO, BuiltinKind.SCREEN_LIGHT, BuiltinKind.UNIT_LIGHT)),
     LEVEL_METER(R.string.design_level_meter, R.string.design_level_meter_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.AUDIO, BuiltinKind.GPS_STATUS, BuiltinKind.WIFI_NETWORKS)),
+    ELEVATION(R.string.design_elevation, R.string.design_elevation_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.GPS_STATUS)),
     FILTER_CELLS(R.string.design_filter_cells, R.string.design_filter_cells_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.FILTER_CARE)),
     HOURGLASS(R.string.design_hourglass, R.string.design_hourglass_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.BREAK_TIMER, BuiltinKind.PARKING_TIMER)),
     LEAF(R.string.design_leaf, R.string.design_leaf_desc, null, FaceLookKind.THEME, setOf(BuiltinKind.ECO_DRIVE)),
@@ -236,6 +237,20 @@ internal data class FaceAction(
  * A value type: a face equal to the last one lets its design skip redrawing,
  * so a feed that repeats itself costs nothing on screen.
  */
+/** What the elevation design draws: [points] in metres, oldest first (null while there is too little history), the readings as text. */
+@Immutable
+internal data class FaceElevation(
+    val points: List<Float>?,
+    /** The current height, as shown ("312 m"), or "--". */
+    val now: String,
+    val min: String,
+    val max: String,
+    /** "Last 12.4 km", or the hint to drive a little while there is no chart. */
+    val caption: String,
+    /** A tap on the face: the next zoom. Null where the face is not touched. */
+    val onZoom: (() -> Unit)? = null
+)
+
 @Immutable
 internal data class WidgetFace(
     val icon: ImageVector,
@@ -285,7 +300,9 @@ internal data class WidgetFace(
     /** The gearbox's forward gears (the gear gate). */
     val gears: Int? = null,
     /** An edit button the tile puts over its corner after a tap ([EditReveal]); [onClick] then only shows it. */
-    val edit: FaceEdit? = null
+    val edit: FaceEdit? = null,
+    /** The road's height over the last kilometres (the elevation design). */
+    val elevation: FaceElevation? = null
 ) {
     /** [severity], or 2 / 0 from [alert]. */
     val level: Int get() = severity ?: if (alert) 2 else 0
