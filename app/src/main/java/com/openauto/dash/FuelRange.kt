@@ -8,6 +8,10 @@ internal const val TANK_LITERS = 60.0
 
 internal const val AVG_L_PER_100KM = 6.5
 
+// Jeep Grand Cherokee WK 3.0 CRD.
+internal const val JEEP_WK_TANK_LITERS = 77.6
+internal const val JEEP_WK_L_PER_100KM = 12.0
+
 /**
  * Fuel level and the range it gives, and where the level came from ("CANbox" or
  * "OBD"). [rangeFromCar] means [rangeKm] is the car's own trip-computer figure

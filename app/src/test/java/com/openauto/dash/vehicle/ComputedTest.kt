@@ -142,6 +142,42 @@ class ComputedTest {
     }
 
     @Test
+    fun theRangeComesFromMeasuredLitresWhenTheBoxGivesThem() {
+        assertEquals(646.0, rangeFromLitresKm(77.6, 12.0), 0.0)
+        assertEquals(0.0, rangeFromLitresKm(-1.0, 12.0), 0.0)
+        assertEquals(350.0, estimatedRangeKm(42.0, 90, 77.6, 12.0)!!, 0.0)     // litres win over the percentage
+        assertEquals(646.0, estimatedRangeKm(null, 100, 77.6, 12.0)!!, 0.0)    // else level x tank
+        assertNull(estimatedRangeKm(null, null, 77.6, 12.0))
+    }
+
+    @Test
+    fun theRangeEstimateReadsLitresAndFallsBackToThePercentage() {
+        profile.value = CarProfile(name = "jeep", tankL = 77.6, consumptionL100 = 12.0)
+        startRangeEstimate(bus, scope, profile)
+        canbox.put(K.FUEL_LEVEL, 50.0)
+        val w = watch(K.RANGE)
+        assertEquals(323.0, bus.now(K.RANGE)!!, 0.0)              // 50 % of 77.6 L at 12
+        canbox.put(K.FUEL_LITRES, 24.0)
+        assertEquals(200.0, bus.now(K.RANGE)!!, 0.0)              // 24 L at 12
+        canbox.put(K.FUEL_LITRES, null)
+        assertEquals(323.0, bus.now(K.RANGE)!!, 0.0)
+        w.cancel()
+    }
+
+    @Test
+    fun theJeepWkHasItsOwnTankAndConsumptionUnlessTheProfileSaysOtherwise() {
+        val jeep = CarProfile(name = "x", vin = "1J8HCE8M45Y123456")
+        assertEquals(77.6, jeep.tank, 0.0)
+        assertEquals(12.0, jeep.typicalUse, 0.0)
+        assertEquals(77.6, CarProfile.JEEP_WK.tank, 0.0)
+        assertEquals(12.0, CarProfile.JEEP_WK.typicalUse, 0.0)
+        assertEquals(60.0, CarProfile(name = "x", make = "Jeep", model = "Grand Cherokee", tankL = 60.0).tank, 0.0)
+        val other = CarProfile(name = "c4")
+        assertEquals(60.0, other.tank, 0.0)
+        assertEquals(6.5, other.typicalUse, 0.0)
+    }
+
+    @Test
     fun theCarsOwnRangeIdlesTheEstimateAndTheLevelIsLetGo() {
         startRangeEstimate(bus, scope, profile)
         obd.put(K.FUEL_LEVEL, 50.0)

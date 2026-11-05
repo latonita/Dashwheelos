@@ -16,7 +16,6 @@ import com.openauto.dash.vehicle.Publisher
 import com.openauto.unitproto.canbox.CanboxValue
 import com.openauto.unitproto.canbox.GearPosition
 import com.openauto.unitproto.canbox.TyreReading
-import kotlin.math.roundToInt
 
 /**
  * The one place a canbox's values become the vehicle bus's: what the decoders said ([CanboxValue]) in, keys on
@@ -48,7 +47,7 @@ internal class XyautoBusPublisher(
         when (v) {
             is CanboxValue.SpeedKmh -> {
                 unitBusSpeed(out, v.kmh?.toFloat())
-                speedKmh = v.kmh?.let { correctSpeed(it.roundToInt()) }?.toFloat()
+                speedKmh = v.kmh?.let(correctSpeed)?.toFloat()
                 consumption()
             }
             is CanboxValue.Rpm -> unitBusRpm(out, v.rpm)

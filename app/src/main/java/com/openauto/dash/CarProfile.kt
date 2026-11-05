@@ -92,11 +92,16 @@ data class CarProfile(
     /** The car's name for a header or a tile, or "Your car" while none was entered. */
     fun displayName(context: Context): String = name.ifBlank { context.getString(R.string.setup_car_title) }
 
-    /** Tank size, or a typical family car's. */
-    val tank: Double get() = tankL ?: TANK_LITERS
+    /** The Jeep Grand Cherokee WK (VIN 1J8HC...), or a profile that names it: its own defaults apply while the specs are unset. */
+    val isJeepWk: Boolean get() =
+        vin.trim().uppercase().startsWith("1J8HC") ||
+            (make.trim().equals("Jeep", ignoreCase = true) && model.contains("Cherokee", ignoreCase = true))
 
-    /** Everyday consumption, or the old rough figure. */
-    val typicalUse: Double get() = consumptionL100 ?: AVG_L_PER_100KM
+    /** Tank size, or the Jeep WK's 77.6 L for that car, or a typical family car's. */
+    val tank: Double get() = tankL ?: if (isJeepWk) JEEP_WK_TANK_LITERS else TANK_LITERS
+
+    /** Everyday consumption, or the WK's 12 L/100 km for that car, or the old rough figure. */
+    val typicalUse: Double get() = consumptionL100 ?: if (isJeepWk) JEEP_WK_L_PER_100KM else AVG_L_PER_100KM
 
     /** Coolant temperature the engine runs at once warm. */
     val hotC: Int get() = operatingTempC ?: 90
@@ -240,6 +245,17 @@ data class CarProfile(
             oilCapacityL = 3.75,
             oilSpec = "5W-30 PSA B71 2290",
             operatingTempC = 90
+        )
+
+        /** The Jeep Grand Cherokee WK 3.0 CRD: 77.6 L tank, about 12 L/100 km in everyday use. */
+        val JEEP_WK = CarProfile(
+            name = "Jeep Grand Cherokee WK 3.0 CRD",
+            make = "Jeep", model = "Grand Cherokee WK", year = 2005,
+            engine = "3.0 CRD V6 (OM642)", fuel = FuelType.DIESEL,
+            gearbox = GearboxType.AUTOMATIC, gearboxName = "W5A580", gears = 5,
+            tankL = JEEP_WK_TANK_LITERS, consumptionL100 = JEEP_WK_L_PER_100KM,
+            particleFilter = false, vin = "",
+            source = SpecSource.PRESET
         )
 
         fun fromJson(o: JSONObject): CarProfile {

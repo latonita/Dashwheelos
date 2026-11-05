@@ -51,7 +51,7 @@ internal fun fuelInfoNow(car: CarProfile = CarProfileStore.current): FuelInfo? {
     return when {
         pct != null && range == null ->
             fuelInfo(
-                pct, rangeFromLevelKm(pct, car.tank, car.typicalUse).roundToInt(), car.tank, car.typicalUse,
+                pct, estimatedRangeKm(Vehicle.bus.sample(K.FUEL_LITRES).value?.value, pct, car.tank, car.typicalUse)!!.roundToInt(), car.tank, car.typicalUse,
                 fromObd = level?.source?.kind == SourceKind.OBD, rangeEstimated = true
             )
         pct == null && range != null && range.quality != Quality.ESTIMATED -> {

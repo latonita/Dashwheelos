@@ -167,10 +167,12 @@ class XyautoBusPublisherTest {
     fun fuelLevelLitresAndRangeStaySixHours() {
         apply(CanboxValue.FuelLevelPct(63), CanboxValue.FuelLitres(48.9), CanboxValue.RangeKm(410))
         t += 3 * 3_600_000L
+        bus.expireNow()
         assertEquals(63.0, read(K.FUEL_LEVEL)!!, 0.0)
         assertEquals(48.9, read(K.FUEL_LITRES)!!, 0.0)
         assertEquals(410.0, read(K.RANGE)!!, 0.0)
         t += 3 * 3_600_000L + 1_000
+        bus.expireNow()
         assertNull(read(K.FUEL_LEVEL))
         assertNull(read(K.FUEL_LITRES))
     }
