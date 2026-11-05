@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -317,6 +318,19 @@ class XyautoBusPublisherTest {
 
     private fun tyre(pos: Int, kPa: Int?, leak: Boolean = false) =
         CanboxValue.Tyre(TyreReading(pos, kPa, celsius = null, sensorBatteryLow = false, leak = leak, noSignal = false))
+
+    @Test
+    fun tyreTemperatureAndTheCarsLowPressureWarnTravelWithTheWheel() {
+        apply(
+            CanboxValue.Tyre(TyreReading(TyreReading.FRONT_RIGHT, 150, celsius = 38, sensorBatteryLow = true, leak = false, noSignal = false, lowPressureWarn = true)),
+            tyre(TyreReading.REAR_LEFT, 230)
+        )
+        val m = read(K.TYRES)!!
+        assertEquals(38, m[TyrePos.FRONT_RIGHT]!!.celsius)
+        assertTrue(m[TyrePos.FRONT_RIGHT]!!.lowPressureWarn)
+        assertTrue(m[TyrePos.FRONT_RIGHT]!!.sensorBatteryLow)
+        assertFalse(m[TyrePos.REAR_LEFT]!!.lowPressureWarn)
+    }
 
     @Test
     fun tyresAreOneMapAndAWheelWithNoPressureIsAbsent() {

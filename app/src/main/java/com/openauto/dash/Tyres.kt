@@ -42,7 +42,9 @@ data class Tyre(
     val leak: Boolean,
     val noSignal: Boolean,
     /** When it was heard ([SystemClock.elapsedRealtime]). */
-    val at: Long
+    val at: Long,
+    /** The car's own low-pressure warning (canbox flag bit 3); false from every other source. */
+    val lowPressureWarn: Boolean = false
 )
 
 enum class TyreProblem { LEAK, LOW, HIGH, HOT }
@@ -185,6 +187,7 @@ internal const val TYRE_STALE_MS = 60_000L
 internal fun tyreProblem(t: Tyre, before: TyreProblem? = null, lowKpa: Int = TYRE_LOW_KPA): TyreProblem? = when {
     t.noSignal -> null
     t.leak -> TyreProblem.LEAK
+    t.lowPressureWarn -> TyreProblem.LOW
     t.kPa in 1..lowKpa -> TyreProblem.LOW
     // From 0: a tyre that was low and now reads nothing at all has gone flat, not well.
     before == TyreProblem.LOW && t.kPa in 0 until lowKpa + TYRE_CLEAR_KPA -> TyreProblem.LOW

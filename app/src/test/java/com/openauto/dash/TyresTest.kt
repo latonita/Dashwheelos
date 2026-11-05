@@ -50,6 +50,25 @@ class TyresTest {
     }
 
     @Test
+    fun theCarsLowPressureWarningIsALowProblemUntilItClears() {
+        val warn = tyre(230).copy(lowPressureWarn = true)
+        assertEquals(TyreProblem.LOW, tyreProblem(warn))
+        assertEquals(TyreProblem.LOW, tyreProblem(warn, TyreProblem.LOW))
+        // Flag clear and pressure well above the limit: the problem ends at once.
+        assertNull(tyreProblem(tyre(230), TyreProblem.LOW))
+        // A leak outranks it; no signal silences it.
+        assertEquals(TyreProblem.LEAK, tyreProblem(warn.copy(leak = true)))
+        assertNull(tyreProblem(warn.copy(noSignal = true)))
+    }
+
+    @Test
+    fun aKnownTemperatureRaisesHotAndClearsWithHysteresis() {
+        assertEquals(TyreProblem.HOT, tyreProblem(tyre(230, celsius = 80)))
+        assertEquals(TyreProblem.HOT, tyreProblem(tyre(230, celsius = 72), TyreProblem.HOT))
+        assertNull(tyreProblem(tyre(230, celsius = 60), TyreProblem.HOT))
+    }
+
+    @Test
     fun anUnknownTemperatureIsNeverHot() {
         assertNull(tyreProblem(tyre(230, celsius = null)))
         assertNull(tyreProblem(tyre(230, celsius = null), TyreProblem.HOT))

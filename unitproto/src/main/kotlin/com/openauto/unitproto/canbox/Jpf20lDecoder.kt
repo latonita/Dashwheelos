@@ -175,7 +175,8 @@ object Jpf20lCmd {
  *
  * Offsets are into a [CanFrame]'s payload - the cmd byte is already stripped.
  * Every multi-byte field is big-endian, and every temperature travels as a
- * byte biased by +40 so the box's 8-bit MCU never has to deal with a sign:
+ * byte biased by +40 so the box's 8-bit MCU never has to deal with a sign
+ * (except the 0xB7 tyre temperature, which is the raw WCM byte, see [tyreRawToCelsius]):
  *
  * ```
  * 0xB3 DRIVETRAIN  [0..1] u16  speed      km/h
@@ -190,8 +191,9 @@ object Jpf20lCmd {
  * 0xB6 BODY        [0]    bits 0 FL, 1 FR, 2 RL, 3 RR, 4 tailgate, 5 bonnet; 1 = open
  * 0xB7 TYRE        [0]    u8   position   0 FL, 1 FR, 2 RR, 3 RL, 4 spare
  *                  [1..2] u16  pressure   kPa; FFFF = not available
- *                  [3]    u8   temp       degC + 40; FF = not available
- *                  [4]    bits 0 sensor battery low, 1 leak, 2 no signal
+ *                  [3]    u8   temp       RAW WCM byte, scale unconfirmed (provisionally degF); FF = not available
+ *                  [4]    bits 0 sensor battery low, 1 leak, 2 no signal,
+ *                         3 the car's own low-pressure warning (WCM)
  * 0xB8 FUEL        [0..1] u16  tank       0.1 L; FFFF = not available
  *                  [2..3] u16  range      km; FFFF = not available
  * 0xBB ODOMETER    [0..2] u24  odometer   0.1 km; FFFFFF = not available
@@ -280,6 +282,7 @@ object Jpf20lSignals {
     const val TYRE_SENSOR_BATTERY_LOW = 0x01
     const val TYRE_LEAK = 0x02
     const val TYRE_NO_SIGNAL = 0x04
+    const val TYRE_LOW_WARN = 0x08
 
     /** The highest wheel index the box may report ([TyreReading.SPARE]). */
     const val TYRE_POSITION_MAX = TyreReading.SPARE
@@ -405,10 +408,20 @@ object Jpf20lSignals {
         )
     }
 
+    /** Sanity range for the converted tyre temperature, degC. */
+    private val TYRE_CELSIUS_SANE = -40..150
+
+    /**
+     * The single place that interprets the raw WCM tyre-temperature byte (scale
+     * unconfirmed). Provisionally degF: degC = (raw - 32) * 5 / 9, rounded.
+     * To switch to a biased byte later, replace the body with `raw - 40` or `raw - 50`.
+     */
+    fun tyreRawToCelsius(raw: Int): Int = Math.round((raw - 32) * 5.0 / 9.0).toInt()
+
     /**
      * 0xB7: one wheel's reading, or null when the payload is short or the
      * position is not 0..4. A pressure outside 0..700 kPa (FFFF among them)
-     * or a temperature outside -40..120 degC (FF among them) is null on its
+     * or a temperature that is FF or converts outside -40..150 degC is null on its
      * own: a missing temperature must not cost the pressure. The flag bits
      * are taken as they come - a sensor that reports no signal still has a
      * position worth showing as "--".
@@ -416,7 +429,8 @@ object Jpf20lSignals {
     fun tyre(payload: ByteArray?): TyreReading? {
         val position = u8(payload, OFF_TYRE_POSITION)?.takeIf { it in 0..TYRE_POSITION_MAX } ?: return null
         val kPa = (u16(payload, OFF_TYRE_PRESSURE) ?: return null).takeIf { it in 0..700 }
-        val celsius = biasedTemp(payload, OFF_TYRE_TEMP)?.takeIf { it in -40..120 }
+        val celsius = u8(payload, OFF_TYRE_TEMP)?.takeIf { it != 0xFF }
+            ?.let { tyreRawToCelsius(it) }?.takeIf { it in TYRE_CELSIUS_SANE }
         val flags = u8(payload, OFF_TYRE_FLAGS) ?: return null
         return TyreReading(
             position = position,
@@ -424,7 +438,8 @@ object Jpf20lSignals {
             celsius = celsius,
             sensorBatteryLow = flags and TYRE_SENSOR_BATTERY_LOW != 0,
             leak = flags and TYRE_LEAK != 0,
-            noSignal = flags and TYRE_NO_SIGNAL != 0
+            noSignal = flags and TYRE_NO_SIGNAL != 0,
+            lowPressureWarn = flags and TYRE_LOW_WARN != 0
         )
     }
 }
