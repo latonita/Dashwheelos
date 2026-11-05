@@ -9,6 +9,8 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.StringRes
+import com.openauto.dash.diag.DiagLink
+import com.openauto.dash.diag.DiagTransport
 import com.openauto.dash.vehicle.K
 import com.openauto.dash.vehicle.Source
 import com.openauto.dash.vehicle.SourceKind
@@ -866,6 +868,7 @@ object ObdBluetoothManager {
     suspend fun poll(): Unit = withContext(Dispatchers.IO) {
         if (DemoMode.isOn || DeepObdSource.owns() || _connectionState.value != ObdConnectionState.CONNECTED) return@withContext
         commandMutex.withLock {
+            diagRestoreLocked()
             if (_connectionState.value == ObdConnectionState.CONNECTED) pollLocked()
         }
     }
@@ -993,6 +996,7 @@ object ObdBluetoothManager {
             return@withContext failure(R.string.vehicle_obd_not_connected)
         }
         commandMutex.withLock {
+            diagRestoreLocked()
             // A scan takes seconds: stop between requests when whoever asked is gone.
             suspend fun ask(command: String, timeoutMs: Long = DTC_TIMEOUT_MS): String? {
                 currentCoroutineContext().ensureActive()
@@ -1073,6 +1077,7 @@ object ObdBluetoothManager {
         if (DemoMode.isOn || DeepObdSource.owns() || _connectionState.value != ObdConnectionState.CONNECTED) return@withContext emptyList()
         commandMutex.withLock {
             if (_connectionState.value != ObdConnectionState.CONNECTED) return@withLock emptyList()
+            diagRestoreLocked()
             val ownAddresses = header != null && replyAddress != null
             val replies = ArrayList<String?>(requests.size)
             try {
@@ -1115,6 +1120,7 @@ object ObdBluetoothManager {
             return@withContext failure(R.string.vehicle_obd_not_connected)
         }
         commandMutex.withLock {
+            diagRestoreLocked()
             val raw = sendCommand("04", DTC_TIMEOUT_MS)
                 ?: return@withLock failure(R.string.vehicle_no_response)
             val r = raw.uppercase().trim()
@@ -1148,16 +1154,22 @@ object ObdBluetoothManager {
      * Reads are bounded by [timeoutMs]: a silent or misbehaving adapter
      * would otherwise block this IO coroutine indefinitely on [InputStream.read].
      */
-    private fun sendCommand(command: String, timeoutMs: Long = READ_TIMEOUT_MS): String? {
+    private fun sendCommand(command: String, timeoutMs: Long = READ_TIMEOUT_MS): String? = exchange(command, timeoutMs)
+
+    /** [command] null: write nothing and read on (more of a reply already under way). */
+    private fun exchange(command: String?, timeoutMs: Long): String? {
         val out = outputStream ?: return null
         val input = inputStream ?: return null
+        if (command != null && !diagSending) diag.noteForeign(command)
         return try {
             val buffer = ByteArray(1024)
-            // A reply that came in after its command gave up would otherwise be
-            // read as the answer to this one.
-            while (input.available() > 0) input.read(buffer)
-            out.write((command + "\r").toByteArray())
-            out.flush()
+            if (command != null) {
+                // A reply that came in after its command gave up would otherwise be
+                // read as the answer to this one.
+                while (input.available() > 0) input.read(buffer)
+                out.write((command + "\r").toByteArray())
+                out.flush()
+            }
 
             val response = StringBuilder()
             // On the clock that only goes forward: the unit's own is set by GPS
@@ -1175,11 +1187,11 @@ object ObdBluetoothManager {
                     Thread.sleep(5)
                 }
             }
-            if (response.isEmpty()) unanswered(command) else silentCommands = 0
+            if (response.isEmpty()) unanswered(command ?: "(read on)") else silentCommands = 0
             response.toString().replace(">", "").trim().ifEmpty { null }
         } catch (e: IOException) {
             // The link is gone: drop it so the retry opens a fresh one.
-            Log.w(TAG, "$command: ${e.message}")
+            Log.w(TAG, "${command ?: "(read on)"}: ${e.message}")
             closeQuietly()
             if (_connectionState.value == ObdConnectionState.CONNECTED) _connectionState.value = ObdConnectionState.ERROR
             null
@@ -1199,6 +1211,34 @@ object ObdBluetoothManager {
         silentCommands = 0
         closeQuietly()
         _connectionState.value = ObdConnectionState.ERROR
+    }
+
+    /**
+     * Addressed raw requests for the module diagnostics ([DiagTransport]). Each request holds [commandMutex] by itself,
+     * so the gauge poll runs between modules; whoever takes the mutex for the generic 7DF state first calls
+     * [diagRestoreLocked], and any other address or timing AT command makes the transport's cache forget.
+     */
+    val diag: DiagTransport = DiagTransport(object : DiagLink {
+        override suspend fun <T> exclusive(block: () -> T): T? = withContext(Dispatchers.IO) {
+            if (DemoMode.isOn || DeepObdSource.owns() || _connectionState.value != ObdConnectionState.CONNECTED) return@withContext null
+            commandMutex.withLock {
+                if (_connectionState.value != ObdConnectionState.CONNECTED) return@withLock null
+                diagSending = true
+                try { block() } finally { diagSending = false }
+            }
+        }
+        override fun send(command: String, timeoutMs: Long): String? = sendCommand(command, timeoutMs)
+        override fun readMore(timeoutMs: Long): String? = exchange(null, timeoutMs)
+        override val slowLink: Boolean get() = !_viaUsb.value
+    })
+
+    /** True while the diagnostic transport is the one writing (only touched under commandMutex). */
+    @Volatile private var diagSending = false
+
+    /** Under [commandMutex]: the generic state back, if a diagnostic sweep left it. */
+    private fun diagRestoreLocked() {
+        diagSending = true
+        try { diag.restoreLocked() } finally { diagSending = false }
     }
 
     /** Commands in a row without a single byte back (only touched under commandMutex). */
@@ -1233,6 +1273,7 @@ object ObdBluetoothManager {
     }
 
     private fun closeQuietly() {
+        diag.reset()
         runCatching { inputStream?.close() }
         runCatching { outputStream?.close() }
         runCatching { socket?.close() }
