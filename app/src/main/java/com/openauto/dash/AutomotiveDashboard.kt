@@ -147,6 +147,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
     LaunchedEffect(Unit) { DashThemeStore.appearanceAsked.collect { appearance = it } }
     LaunchedEffect(Unit) { DashThemeStore.modeAsked.collect { themeMode = it } }
     var effects by remember { mutableStateOf(DashThemeStore.loadEffects(context)) }
+    var transparentPanels by remember { mutableStateOf(DashThemeStore.loadTransparentPanels(context)) }
     var barAutoHide by remember { mutableStateOf(DashThemeStore.loadBarAutoHide(context)) }
     var barHideSeconds by remember { mutableIntStateOf(DashThemeStore.loadBarHideSeconds(context)) }
     // Navigation (Settings, Display): the side rail in the bar's place, and tabs in it instead of swiping.
@@ -167,6 +168,8 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
         onArrangeHome = { if (skinLayout(themeMode) != null) lookLayoutAsk = themeMode },
         onAppearance = { appearance = it; DashThemeStore.saveAppearance(context, it) },
         onEffects = { effects = it; DashThemeStore.saveEffects(context, it) },
+        transparentPanels = transparentPanels,
+        onTransparentPanels = { transparentPanels = it; DashThemeStore.saveTransparentPanels(context, it) },
         barAutoHide = barAutoHide, barHideSeconds = barHideSeconds,
         onBarAutoHide = { barAutoHide = it; DashThemeStore.saveBarAutoHide(context, it) },
         onBarHideSeconds = { barHideSeconds = it; DashThemeStore.saveBarHideSeconds(context, it) },
@@ -217,7 +220,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
     var barSettings by ui::barSettings
     var settingsTab by ui::settingsTab
     fun closeSettings() = ui.closeSettings()
-    DashColors.Sync(themeMode, appearance, effects)
+    DashColors.Sync(themeMode, appearance, effects, transparentPanels)
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 

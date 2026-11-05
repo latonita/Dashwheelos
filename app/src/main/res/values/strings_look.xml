@@ -11,4 +11,6 @@
     <string name="look_home_own">Comes with its own Home</string>
     <string name="look_home_own_off">Has its own Home. Arrange Home is off.</string>
     <string name="look_home_keeps">Home stays as it is</string>
+    <string name="dash_transparent_title">Transparent panels</string>
+    <string name="dash_transparent_hint">No panel behind tiles, like the Floating look</string>
 </resources>
