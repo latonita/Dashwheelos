@@ -282,8 +282,8 @@ class ComputedTest {
         assertEquals(TileGear.Reverse, gearOf(Gear.Reverse, 3))
         assertEquals(TileGear.Forward(4), gearOf(Gear.Forward(4), 70))
         assertEquals(TileGear.Free, gearOf(Gear.Neutral, 70))
-        assertEquals(TileGear.Stopped, gearOf(Gear.Park, 0))
-        assertEquals(TileGear.Unknown, gearOf(Gear.Drive, 40))
+        assertEquals(TileGear.Park, gearOf(Gear.Park, 0))
+        assertEquals(TileGear.Drive, gearOf(Gear.Drive, 40))
         // No gear said: standing is told from the speed, as it was.
         assertEquals(TileGear.Stopped, gearOf(null, 0))
         assertEquals(TileGear.Unknown, gearOf(null, 40))

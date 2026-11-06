@@ -103,6 +103,9 @@ class HeadUnitAndGearTest {
         assertEquals("N", gearGlyph(Gear.Free))
         assertEquals("5", gearGlyph(Gear.Forward(5)))
         assertEquals("–", gearGlyph(Gear.Stopped))
+        // An automatic's lever from the canbox: P and D, not a dash.
+        assertEquals("P", gearGlyph(Gear.Park))
+        assertEquals("D", gearGlyph(Gear.Drive))
     }
 
     @Test
