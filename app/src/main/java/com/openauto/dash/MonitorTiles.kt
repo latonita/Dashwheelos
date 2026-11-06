@@ -409,6 +409,8 @@ internal fun gearGlyph(gear: Gear): String = when (gear) {
     Gear.Reverse -> "R"
     Gear.Free -> "N"
     is Gear.Forward -> gear.n.toString()
+    Gear.Park -> "P"
+    Gear.Drive -> "D"
     Gear.Stopped, Gear.Unknown -> "–"
 }
 
@@ -417,6 +419,8 @@ private fun gearCaption(r: GearReading): String = when (val g = r.gear) {
     Gear.Reverse -> stringResource(R.string.gear_reverse)
     Gear.Free -> stringResource(R.string.gear_free)
     Gear.Stopped -> stringResource(R.string.gear_stopped)
+    Gear.Park -> stringResource(R.string.gear_park)
+    Gear.Drive -> stringResource(R.string.gear_drive)
     is Gear.Forward -> stringResource(R.string.gear_nth, g.n) + (r.rpm?.let { " · " + String.format(Locale.getDefault(), "%,d rpm", it) } ?: "")
     Gear.Unknown -> if (r.rpm == null) stringResource(R.string.gear_needs_data) else ""
 }
@@ -522,5 +526,7 @@ internal fun GearGate(f: WidgetFace, look: FaceLook, m: FaceMetrics) {
 private fun glyphGear(glyph: String): Gear = when (glyph) {
     "R" -> Gear.Reverse
     "N" -> Gear.Free
+    "P" -> Gear.Park
+    "D" -> Gear.Drive
     else -> glyph.toIntOrNull()?.let { Gear.Forward(it) } ?: Gear.Unknown
 }

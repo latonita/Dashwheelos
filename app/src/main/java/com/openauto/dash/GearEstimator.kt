@@ -48,6 +48,10 @@ internal sealed interface Gear {
     /** Moving with no gear engaged: neutral, or the clutch open. */
     data object Free : Gear
     data object Stopped : Gear
+    /** An automatic's lever in P, as the car says it. */
+    data object Park : Gear
+    /** An automatic's lever in D (or S): the car gives no gear number. */
+    data object Drive : Gear
     /** No revs or no speed to tell by. */
     data object Unknown : Gear
 }
@@ -175,6 +179,8 @@ internal fun vehicleGearOf(gear: Gear): VehicleGear? = when (gear) {
     is Gear.Forward -> VehicleGear.Forward(gear.n)
     Gear.Free -> VehicleGear.Neutral
     Gear.Stopped, Gear.Unknown -> null
+    Gear.Park -> VehicleGear.Park
+    Gear.Drive -> VehicleGear.Drive
 }
 
 /** The gear for a tile: what the bus has, and where it has none, standing or not told. */
@@ -182,9 +188,9 @@ internal fun gearOf(gear: VehicleGear?, speedKmh: Int?): Gear = when (gear) {
     VehicleGear.Reverse -> Gear.Reverse
     is VehicleGear.Forward -> Gear.Forward(gear.n)
     VehicleGear.Neutral -> Gear.Free
-    VehicleGear.Park -> Gear.Stopped
-    // A car that says "drive" without a number has no gear to put in a gate.
-    VehicleGear.Drive -> Gear.Unknown
+    VehicleGear.Park -> Gear.Park
+    // No number to put in a gate, but the lever is known: D.
+    VehicleGear.Drive -> Gear.Drive
     null -> if (speedKmh != null && speedKmh < GearEstimator.STOPPED_KMH) Gear.Stopped else Gear.Unknown
 }
 

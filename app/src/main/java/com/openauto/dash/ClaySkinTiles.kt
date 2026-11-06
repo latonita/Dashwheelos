@@ -845,6 +845,8 @@ private fun gearMark(gear: Gear): String = when (gear) {
     Gear.Reverse -> "R"
     is Gear.Forward -> gear.n.toString()
     Gear.Free -> "N"
+    Gear.Park -> "P"
+    Gear.Drive -> "D"
     Gear.Stopped, Gear.Unknown -> "–"
 }
 

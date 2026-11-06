@@ -24,6 +24,8 @@
     <string name="gear_reverse">Reverse</string>
     <string name="gear_free">Coasting</string>
     <string name="gear_stopped">Stopped</string>
+    <string name="gear_park">Park</string>
+    <string name="gear_drive">Drive</string>
     <string name="gear_nth">Gear %1$d</string>
     <string name="gear_needs_data">Needs the OBD adapter or the car box</string>
     <string name="design_gear_gate">Gear gate</string>
