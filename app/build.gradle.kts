@@ -39,8 +39,9 @@ android {
         versionName = System.getenv("VERSION_NAME") ?: "1.0"
 
         // Where the in-app updater looks for new releases.
-        buildConfigField("String", "GITHUB_OWNER", "\"deviloufr-ai\"")
-        buildConfigField("String", "GITHUB_REPO", "\"Dashwheel\"")
+        // This fork's own releases: upstream's later builds aren't open source.
+        buildConfigField("String", "GITHUB_OWNER", "\"latonita\"")
+        buildConfigField("String", "GITHUB_REPO", "\"Dashwheelos\"")
 
         vectorDrawables {
             useSupportLibrary = true

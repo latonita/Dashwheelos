@@ -440,14 +440,28 @@ class UpdateManager(private val context: Context) {
         }
 
         /**
-         * A build of main ("v1.0.712"), stable or beta: not a branch's test
-         * build ("my-branch-v1.0.700") nor the second screen's card image.
+         * A build of main ("v1.0.712", or this fork's dated "v2026.11.06" and
+         * "v2026.11.06.2"), stable or beta: not a branch's test build
+         * ("my-branch-v1.0.700") nor the second screen's card image.
          */
-        internal fun isMainTag(tag: String): Boolean = Regex("^v\\d+\\.\\d+\\.\\d+$").matches(tag)
+        internal fun isMainTag(tag: String): Boolean =
+            Regex("^v\\d+\\.\\d+\\.\\d+$").matches(tag) || DATED_TAG.matches(tag)
 
-        /** Build number from a release tag or name: "v1.0.42" -> 42 (the last number wins). */
-        internal fun parseBuildNumber(text: String): Long? =
-            Regex("(\\d+)").findAll(text).lastOrNull()?.value?.toLongOrNull()
+        /** This fork's release tags: the date, and a number when there's more than one that day. */
+        private val DATED_TAG = Regex("^v(\\d{4})\\.(\\d{2})\\.(\\d{2})(?:\\.(\\d{1,2}))?$")
+
+        /**
+         * Build number from a release tag or name: "v1.0.42" -> 42 (the last
+         * number wins); a dated tag "v2026.11.06.2" -> 2026110602, the same
+         * number CI gives the APK as its version code.
+         */
+        internal fun parseBuildNumber(text: String): Long? {
+            DATED_TAG.matchEntire(text)?.let { m ->
+                val (y, mo, d, n) = m.destructured
+                return "$y$mo$d".toLong() * 100 + (n.toLongOrNull() ?: 0L)
+            }
+            return Regex("(\\d+)").findAll(text).lastOrNull()?.value?.toLongOrNull()
+        }
 
         /**
          * The launcher's own APK among a release's assets, as (name, URL)
