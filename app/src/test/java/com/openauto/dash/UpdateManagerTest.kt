@@ -77,4 +77,16 @@ class UpdateManagerTest {
         assertFalse(UpdateManager.isMainTag("second-screen-image"))
         assertFalse(UpdateManager.isMainTag("v1.0.712-rc"))
     }
+
+    @Test
+    fun datedTagsAreReleasesAndCountByDate() {
+        assertTrue(UpdateManager.isMainTag("v2026.11.06"))
+        assertTrue(UpdateManager.isMainTag("v2026.11.06.2"))
+        assertFalse(UpdateManager.isMainTag("v2026.11.06-test"))
+        assertEquals(2026110600L, UpdateManager.parseBuildNumber("v2026.11.06"))
+        assertEquals(2026110602L, UpdateManager.parseBuildNumber("v2026.11.06.2"))
+        assertTrue(UpdateManager.parseBuildNumber("v2026.11.07")!! > UpdateManager.parseBuildNumber("v2026.11.06.2")!!)
+        // Every dated build is newer than any upstream-style "v1.0.n" one.
+        assertTrue(UpdateManager.parseBuildNumber("v2026.11.06")!! > 100_000L)
+    }
 }
