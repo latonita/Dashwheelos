@@ -92,8 +92,11 @@ jobs:
           if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
             echo "::error::No DEBUG_KEYSTORE_BASE64 secret: the APK could never update in place."; exit 1
           fi
-          mkdir -p "$HOME/.android"
-          echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
+          echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/sign.keystore"
+          # Gradle's own debug keystore can live elsewhere on the runner (ANDROID_USER_HOME),
+          # so the APK is signed again with this key after the build, and checked.
+          keytool -list -v -keystore "$RUNNER_TEMP/sign.keystore" -storepass android -alias androiddebugkey             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' > "$RUNNER_TEMP/sign.sha256"
+          echo "Signing certificate SHA-256: $(cat "$RUNNER_TEMP/sign.sha256")"
 
       - name: Build the launcher3 APK
         run: ./gradlew :app:assembleGithubDebug -PdashApplicationId=com.android.launcher3 --stacktrace
@@ -101,13 +104,22 @@ jobs:
       - name: Name the APK
         run: |
           apk="Dashwheel-launcher3-$VERSION_NAME.apk"
-          cp app/build/outputs/apk/github/debug/app-github-debug.apk "$apk"
+          bt="$ANDROID_HOME/build-tools/35.0.0"
+          "$bt/apksigner" sign --ks "$RUNNER_TEMP/sign.keystore" --ks-pass pass:android             --ks-key-alias androiddebugkey --key-pass pass:android             --out "$apk" app/build/outputs/apk/github/debug/app-github-debug.apk
+          got=$("$bt/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          want=$(cat "$RUNNER_TEMP/sign.sha256")
+          echo "APK certificate SHA-256: $got"
+          if [ -z "$got" ] || [ "$got" != "$want" ]; then
+            echo "::error::APK is signed with $got, expected $want"; exit 1
+          fi
           sha256sum "$apk" > "$apk.sha256"
           echo "APK=$apk" >> "$GITHUB_ENV"
 
       - name: Release notes
         run: |
           prev=$(git describe --tags --abbrev=0 --match 'v[0-9][0-9][0-9][0-9].*' HEAD^ 2>/dev/null || true)
+          # The first release lists everything this fork added on the last open-source upstream.
+          prev=${prev:-1251898a}
           {
             echo "Dashwheel for Android 8.1 / GLES 2.0 head units, built from \`${GITHUB_SHA::8}\` (branch \`oss/radio\`)."
             echo
