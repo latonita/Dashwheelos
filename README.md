@@ -2,6 +2,26 @@
 
 # Dashwheel
 
+> **This is a fork: Dashwheel for Android 8.1 / OpenGL ES 2.0 head units.**
+> It is based on [`1251898a`](https://github.com/deviloufr-ai/Dashwheel/commit/1251898a1981140ea53ac6ab33ce2de8b587e228),
+> the last GPLv3 version of [Dashwheel](https://github.com/deviloufr-ai/Dashwheel); everything after it upstream is
+> not open source and is not used here. Branch `oss/radio` is the main line, with one `oss/<feature>` branch per change.
+>
+> What it adds: runs on Android 8.1 (API 27) and GLES 2.0 (MapLibre 10), TLS 1.3 via Conscrypt, XYAuto units and
+> Hiworld canbox data (gear, rpm, fuel, consumption, tyre pressure and temperature, indicators, ignition, dimmer),
+> the stock FM radio in Now Playing and presets, map tweaks (dark contrast, 3D buildings, smooth follow, ride trail),
+> elevation and custom gauge tiles, transparent panels, Jeep fault codes over OBD, performance fixes for slow SoCs,
+> head-unit media keys sent to the playing app.
+>
+> **Build** (JDK 21, Android SDK):
+> `./gradlew :app:assembleGithubDebug -PdashApplicationId=com.android.launcher3`
+> → `app/build/outputs/apk/github/debug/app-github-debug.apk`. The `com.android.launcher3` id keeps it alive when
+> XYAuto units go to sleep. Setup on the unit, the patched FM radio and notes on the hardware:
+> [latonita/xyauto-9320-headunit](https://github.com/latonita/xyauto-9320-headunit).
+>
+> The rest of this README is upstream's text from that version: features added upstream later, the download links,
+> Android 9+ and the commercial-licence notes don't apply to this fork.
+
 **The free, open-source car launcher for Android head units (QF, FYT, Microntek and more).** Map, music and live car data on one calm screen: up to seven dashboards you arrange yourself, 55+ widgets, whole-design skins, an AI mechanic that explains warning lights, and your phone's calls and messages on the big screen. No ads, no trial, no account.
 
 ![Dashwheel: map, speed, weather and music on one screen](docs/screenshots/01_hero.jpg)
