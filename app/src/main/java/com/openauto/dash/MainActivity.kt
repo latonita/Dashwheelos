@@ -332,7 +332,32 @@ class MainActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (!SecondScreenController.serviceFiltersKeys && SecondScreenController.onWheelKey(event)) return true
         if (SteeringWheelStore.onKeyEvent(this, event)) return true
+        if (mediaKeyToPlaying(event)) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    /** The media key whose press went to the playing app: its release is eaten too. */
+    private var mediaKeyHandled = KeyEvent.KEYCODE_UNKNOWN
+
+    /**
+     * The unit's media keys, left to Android, go to the session whose audio it
+     * sees playing, and it doesn't see Spotify's: they fell to another player.
+     * Sent here straight to the app that plays, when one does.
+     */
+    private fun mediaKeyToPlaying(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (code != KeyEvent.KEYCODE_MEDIA_NEXT && code != KeyEvent.KEYCODE_MEDIA_PREVIOUS &&
+            code != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) return false
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount > 0) return code == mediaKeyHandled
+                val sent = CarMediaController.shared(this).sendKeyToPlaying(code)
+                mediaKeyHandled = if (sent) code else KeyEvent.KEYCODE_UNKNOWN
+                sent
+            }
+            KeyEvent.ACTION_UP -> (code == mediaKeyHandled).also { if (it) mediaKeyHandled = KeyEvent.KEYCODE_UNKNOWN }
+            else -> false
+        }
     }
 
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {

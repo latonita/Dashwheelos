@@ -431,6 +431,34 @@ class CarMediaController(private val context: Context) {
         }
     }
 
+    /**
+     * A media key sent straight to the app that is playing, through its session.
+     * A key sent with dispatchMediaKeyEvent goes to the session whose audio the
+     * system sees playing: on this unit Spotify's audio isn't reported, so the
+     * key fell to the last media button receiver (another player) and Spotify
+     * never skipped. The head unit's own players are left out: the unit already
+     * handles its keys for them. False when no other app plays: the caller then
+     * sends the key the usual way. The sessions are read afresh: the ones bound
+     * here are only followed while the dashboard is shown, and a wheel key
+     * comes mostly over the player's own screen.
+     */
+    fun sendKeyToPlaying(keyCode: Int): Boolean {
+        val sessions = runCatching { sessionManager.getActiveSessions(listenerComponent) }.getOrNull() ?: boundControllers
+        // Buffering or skipping counts: a second press comes while the next track loads.
+        val playing = sessions.firstOrNull {
+            it.playbackState?.state in PLAYING_STATES && !HeadUnitMedia.isStock(it.packageName)
+        } ?: return false
+        val controls = playing.transportControls
+        return runCatching {
+            when (keyCode) {
+                KeyEvent.KEYCODE_MEDIA_NEXT -> controls.skipToNext()
+                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> controls.skipToPrevious()
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> controls.pause()
+                else -> return false
+            }
+        }.isSuccess
+    }
+
     fun next() {
         if (DemoMode.isOn) return DemoMode.next()
         stockShown?.let { return stockNext(it) }
@@ -457,6 +485,13 @@ class CarMediaController(private val context: Context) {
 
         /** How often the head unit player's play state and position are read again while it's shown. */
         private const val STOCK_TICK_MS = 1_000L
+
+        /** A session in one of these takes the media keys: playing, or getting there. */
+        private val PLAYING_STATES = setOf(
+            PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING,
+            PlaybackState.STATE_SKIPPING_TO_NEXT, PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+            PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM
+        )
 
         /** How long a player opened by [playPause] has to publish its session. */
         private const val PENDING_PLAY_MS = 15_000L

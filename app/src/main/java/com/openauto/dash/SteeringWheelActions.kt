@@ -220,8 +220,12 @@ internal enum class SteeringWheelAction(
         if (!started) Toast.makeText(context, R.string.wheel_no_voice_assistant, Toast.LENGTH_SHORT).show()
     }
 
-    /** Routed to whichever app holds the active media session, exactly like a hardware media button. */
+    /**
+     * To the app that is playing, through its session; else routed by the system,
+     * exactly like a hardware media button (which also wakes a stopped player).
+     */
     private fun dispatchMediaKey(context: Context, keyCode: Int) {
+        if (CarMediaController.shared(context).sendKeyToPlaying(keyCode)) return
         val audio = MediaVolume.audio(context)
         listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP).forEach { action ->
             runCatching { audio.dispatchMediaKeyEvent(KeyEvent(action, keyCode)) }
