@@ -191,7 +191,7 @@ object Jpf20lCmd {
  * 0xB6 BODY        [0]    bits 0 FL, 1 FR, 2 RL, 3 RR, 4 tailgate, 5 bonnet; 1 = open
  * 0xB7 TYRE        [0]    u8   position   0 FL, 1 FR, 2 RR, 3 RL, 4 spare
  *                  [1..2] u16  pressure   kPa; FFFF = not available
- *                  [3]    u8   temp       RAW WCM byte, scale unconfirmed (provisionally degF); FF = not available
+ *                  [3]    u8   temp       RAW WCM byte, degC + 50; FF = not available
  *                  [4]    bits 0 sensor battery low, 1 leak, 2 no signal,
  *                         3 the car's own low-pressure warning (WCM)
  * 0xB8 FUEL        [0..1] u16  tank       0.1 L; FFFF = not available
@@ -409,14 +409,13 @@ object Jpf20lSignals {
     }
 
     /** Sanity range for the converted tyre temperature, degC. */
-    private val TYRE_CELSIUS_SANE = -40..150
+    private val TYRE_CELSIUS_SANE = -50..150
 
     /**
-     * The single place that interprets the raw WCM tyre-temperature byte (scale
-     * unconfirmed). Provisionally degF: degC = (raw - 32) * 5 / 9, rounded.
-     * To switch to a biased byte later, replace the body with `raw - 40` or `raw - 50`.
+     * The single place that interprets the raw WCM tyre-temperature byte:
+     * degC = raw - 50 (confirmed on the car by cold-soak tests, 2026-11-06).
      */
-    fun tyreRawToCelsius(raw: Int): Int = Math.round((raw - 32) * 5.0 / 9.0).toInt()
+    fun tyreRawToCelsius(raw: Int): Int = raw - 50
 
     /**
      * 0xB7: one wheel's reading, or null when the payload is short or the
