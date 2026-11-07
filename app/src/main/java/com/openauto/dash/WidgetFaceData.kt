@@ -153,6 +153,8 @@ internal fun rememberWidgetFace(kind: BuiltinKind, env: SkinTileEnv): WidgetFace
     BuiltinKind.CUSTOM_GAUGE -> null
     // The bar has no designs of its own: it is buttons.
     BuiltinKind.DASH_BAR -> null
+    // Lamps drawn by the tile itself (IndicatorsTile.kt), whatever the look.
+    BuiltinKind.INDICATORS -> null
 }
 
 /**

@@ -467,7 +467,8 @@ object DemoMode {
             busPublisher.put(K.DOORS, McuReader.DoorState())
             busPublisher.put(K.FUEL_LEVEL, 58.0)
             busPublisher.put(K.RANGE, rangeKm.toDouble())
-            busPublisher.put(K.HANDBRAKE, false)
+            // On in the first phase of the 24 s cycle (the Indicators tile's parking brake).
+            busPublisher.put(K.HANDBRAKE, (t / 6).toInt().mod(4) == 0)
             busPublisher.put(K.DRIVER_BELT, false)
             busPublisher.put(K.ODOMETER, DEMO_ODOMETER_KM + tripM / 1000)
             // A Peugeot or Citroën's own trip computer, with a brake bulb out: Car problems shows it on the car.
@@ -476,7 +477,10 @@ object DemoMode {
             )
             // The car's body: dipped beams on, nothing at a standstill or off the throttle (the injectors cut), more the
             // harder it pulls; the trip going up.
-            busPublisher.put(K.LIGHTS, listOf(CarLight.DIPPED))
+            // Every 24 s: nothing, the left signal, the right one, a fog light, so the Indicators tile has something to show.
+            val demoStep = (t / 6).toInt().mod(4)
+            busPublisher.put(K.LIGHTS, listOf(CarLight.DIPPED) + if (demoStep == 3) listOf(CarLight.FRONT_FOG, CarLight.REAR_FOG) else emptyList())
+            busPublisher.put(K.INDICATORS, com.openauto.dash.vehicle.Indicators(left = demoStep == 1, right = demoStep == 2))
             busPublisher.put(K.FUEL_CONSUMPTION, if (kmh < 3 || accel < -0.3) 0.0 else 3.2 + load * 0.07)
             busPublisher.put(K.TRIP_DISTANCE, DEMO_TRIP_KM + tripM / 1000)
             // Tyres near 2.3 bar and warming a little; the front left one slowly going low.

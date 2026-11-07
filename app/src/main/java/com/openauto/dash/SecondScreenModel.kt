@@ -142,7 +142,9 @@ object ClusterLayouts {
         BuiltinKind.SHARE_ETA, BuiltinKind.VOICE_NOTES, BuiltinKind.QUICK_SWITCHES,
         BuiltinKind.WIFI_NETWORKS, BuiltinKind.BT_DEVICES, BuiltinKind.PARKING_TIMER, BuiltinKind.FUEL_LOG,
         // Its signal is chosen per tile; a board slot has nowhere to keep it.
-        BuiltinKind.CUSTOM_GAUGE
+        BuiltinKind.CUSTOM_GAUGE,
+        // Lamps drawn by their own tile, which a board slot (a designed face) cannot show.
+        BuiltinKind.INDICATORS
     )
 
     /** The live pictures: the 3D map and an app's copy. Drawn as they are, without designs. */

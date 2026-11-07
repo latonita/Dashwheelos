@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.NetworkWifi
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.CameraAlt
@@ -136,6 +137,7 @@ internal val BuiltinKind.carDataKeys: Set<Key<*>>?
         BuiltinKind.GEAR -> setOf(K.GEAR, K.ODOMETER)
         BuiltinKind.DOORS -> setOf(K.DOORS)
         BuiltinKind.CAR_STATUS -> setOf(K.ODOMETER)
+        BuiltinKind.INDICATORS -> setOf(K.INDICATORS, K.LIGHTS, K.HANDBRAKE, K.DRIVER_BELT)
         BuiltinKind.OBD_DTC, BuiltinKind.OBD_ALL, BuiltinKind.MY_READINGS, BuiltinKind.CAN_MON -> emptySet()
         else -> null
     }
@@ -264,4 +266,5 @@ internal fun kindIcon(kind: BuiltinKind): ImageVector = when (kind) {
     BuiltinKind.DRIVE_HISTORY -> Icons.Filled.History
     BuiltinKind.NOW -> Icons.Filled.Layers
     BuiltinKind.CUSTOM_GAUGE -> Icons.Filled.Speed
+    BuiltinKind.INDICATORS -> Icons.Filled.Lightbulb
 }

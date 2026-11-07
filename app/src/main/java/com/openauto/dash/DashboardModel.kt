@@ -108,7 +108,9 @@ enum class BuiltinKind(
     // The one thing that matters right now, picked from the other feeds (NowCard.kt).
     NOW(R.string.widgets_now, WidgetCategory.DRIVING, R.string.widgets_now_blurb, 5, 2),
     // One vehicle-bus signal of the driver's choice, drawn as a dial, a bar or a number; any number of copies (CustomGauge.kt).
-    CUSTOM_GAUGE(R.string.gauge_kind, WidgetCategory.VEHICLE, R.string.gauge_kind_blurb, 3, 3)
+    CUSTOM_GAUGE(R.string.gauge_kind, WidgetCategory.VEHICLE, R.string.gauge_kind_blurb, 3, 3),
+    // The car's tell-tales (turn signals, beams, fogs, hazards) as lamps, from the vehicle bus (IndicatorsTile.kt).
+    INDICATORS(R.string.indicators_kind, WidgetCategory.VEHICLE, R.string.indicators_kind_blurb, 4, 1)
 }
 
 /**
@@ -227,7 +229,7 @@ fun BuiltinKind.minSize(): Pair<Int, Int> = when (this) {
     BuiltinKind.SHARE_ETA, BuiltinKind.DRIVE_HISTORY -> 3 to 2
     BuiltinKind.NAVMAP, BuiltinKind.MAPS_INSIDE, BuiltinKind.PIP_ANCHOR -> 3 to 3
     BuiltinKind.DASH_BAR -> 1 to 3
-    BuiltinKind.QUICK_SWITCHES -> 3 to 1
+    BuiltinKind.QUICK_SWITCHES, BuiltinKind.INDICATORS -> 3 to 1
     // One card of words: a sentence needs the width.
     BuiltinKind.NOW -> 3 to 2
     // A gauge or a picture with a few lines under it.

@@ -737,6 +737,7 @@ internal fun TileContent(
             BuiltinKind.DASH_BAR -> DashBarTile()
             BuiltinKind.HEAD_UNIT -> HeadUnitCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.GEAR -> GearCard(modifier = Modifier.fillMaxSize())
+            BuiltinKind.INDICATORS -> IndicatorsCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.GFORCE -> GForceCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.PARKING -> ParkingCard(modifier = Modifier.fillMaxSize())
             BuiltinKind.CALENDAR -> CalendarCard(modifier = Modifier.fillMaxSize())
