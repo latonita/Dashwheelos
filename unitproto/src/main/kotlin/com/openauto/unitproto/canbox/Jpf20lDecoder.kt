@@ -37,6 +37,7 @@ class Jpf20lDecoder : HiworldJpf2Decoder() {
                 CanboxValue.SpeedKmh(Jpf20lSignals.speedKmh(p)),
                 CanboxValue.Rpm(Jpf20lSignals.rpm(p)),
                 CanboxValue.EngineLoadPct(Jpf20lSignals.engineLoadPct(p)),
+                CanboxValue.ThrottlePct(Jpf20lSignals.throttlePct(p)),
                 CanboxValue.FuelFlowLph(Jpf20lSignals.fuelFlowLph(p)),
                 CanboxValue.OilPressureKpa(Jpf20lSignals.oilPressureKpa(p)),
                 CanboxValue.ManifoldHpa(Jpf20lSignals.manifoldHpa(p))
@@ -136,7 +137,7 @@ object Jpf20lCmd {
  *                [5] S5 gear   0 P 1 R 2 N 3 D 4..7 AutoStick 1..4, FF n/a
  *                [6] S6 SRC    source-alive bits: 0 `000`, 1 `002`, 2 `003`, 3 `006`, 4 `013`, 5 `0D0`, 6 `1B2`, 7 `012`
  * 0xB3 FAST      [0..1] speed 0.1 km/h  [2..3] rpm  [4] load %  [5..6] flow 0.01 L/h  [7] oil 4 kPa/count
- *                [8..9] boost/MAP hPa abs. Sentinels FF / FFFF
+ *                [8..9] boost/MAP hPa abs  [10] accelerator pedal %. Sentinels FF / FFFF
  * 0xB4 ENGINE    [0] coolant degC+40  [1] volts 0.1 V  [2] fuel %  [3..4] fuel 0.1 L. Sentinels FF / FFFF
  * 0xB5 AMBIENT   [0..1] s16 outside 0.1 degC (8000 n/a)  [2] minutes since RUN (FF n/a)
  * 0xB7 TYRE      [0] position  [1..2] kPa  [3] temp  [4] flags (see [tyre])
@@ -145,7 +146,7 @@ object Jpf20lCmd {
  */
 object Jpf20lSignals {
     const val STATE_SIZE = 7
-    const val FAST_SIZE = 10
+    const val FAST_SIZE = 11
     const val ENGINE_SIZE = 5
     const val AMBIENT_SIZE = 3
     const val TRIP_SIZE = 6
@@ -219,6 +220,7 @@ object Jpf20lSignals {
     const val OFF_FLOW = 5
     const val OFF_OIL = 7
     const val OFF_BOOST = 8
+    const val OFF_THROTTLE = 10
     const val MAX_SPEED_DKMH = 4000
     const val MAX_RPM = 12_000
     /** A flow no engine reaches; the largest legal field is 512.0 L/h. */
@@ -408,6 +410,9 @@ object Jpf20lSignals {
     /** Oil pressure, kPa gauge (4 per count); 0 is a real reading (engine off), FF withdraws. */
     fun oilPressureKpa(p: ByteArray?): Double? =
         u8(p, OFF_OIL)?.takeIf { it != 0xFF }?.let { it * OIL_KPA_PER_COUNT }
+
+    /** Accelerator pedal, 0..100 %; FF withdraws. */
+    fun throttlePct(p: ByteArray?): Int? = u8(p, OFF_THROTTLE)?.takeIf { it in 0..100 }
 
     /** Manifold absolute pressure in hPa; FFFF withdraws. */
     fun manifoldHpa(p: ByteArray?): Double? = u16(p, OFF_BOOST)?.takeIf { it != 0xFFFF }?.toDouble()

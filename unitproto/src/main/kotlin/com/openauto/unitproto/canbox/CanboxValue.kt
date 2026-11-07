@@ -13,6 +13,8 @@ sealed interface CanboxValue {
     data class SpeedKmh(val kmh: Int?) : CanboxValue
     data class Rpm(val rpm: Int?) : CanboxValue
     data class EngineLoadPct(val pct: Int?) : CanboxValue
+    /** The accelerator pedal, 0..100 %. */
+    data class ThrottlePct(val pct: Int?) : CanboxValue
     data class CoolantC(val celsius: Int?) : CanboxValue
     data class OutsideTempC(val celsius: Double?) : CanboxValue
     data class BatteryVolts(val volts: Double?) : CanboxValue

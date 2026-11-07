@@ -55,13 +55,14 @@ class XyautoBusPublisherTest {
     @Test
     fun theGaugesLandOnTheirKeys() {
         apply(
-            CanboxValue.SpeedKmh(60), CanboxValue.Rpm(2000), CanboxValue.EngineLoadPct(40),
+            CanboxValue.SpeedKmh(60), CanboxValue.Rpm(2000), CanboxValue.EngineLoadPct(40), CanboxValue.ThrottlePct(30),
             CanboxValue.CoolantC(90), CanboxValue.OutsideTempC(-12.3), CanboxValue.BatteryVolts(14.3),
             CanboxValue.OilPressureKpa(240.0), CanboxValue.ManifoldHpa(1152.0), CanboxValue.EngineOffMinutes(10)
         )
         assertEquals(60.0, read(K.VEHICLE_SPEED)!!, 0.0)
         assertEquals(2000.0, read(K.RPM)!!, 0.0)
         assertEquals(40.0, read(K.ENGINE_LOAD)!!, 0.0)
+        assertEquals(30.0, read(K.THROTTLE)!!, 0.0)
         assertEquals(90.0, read(K.COOLANT_TEMP)!!, 0.0)
         assertEquals(-12.3, read(K.OUTSIDE_TEMP)!!, 0.0)
         assertEquals(14.3, read(K.BATTERY_VOLTS)!!, 0.0)
@@ -277,21 +278,21 @@ class XyautoBusPublisherTest {
     @Test
     fun aNullInsideAValueWithdrawsItsKey() {
         apply(
-            CanboxValue.SpeedKmh(60), CanboxValue.Rpm(2000), CanboxValue.EngineLoadPct(40),
+            CanboxValue.SpeedKmh(60), CanboxValue.Rpm(2000), CanboxValue.EngineLoadPct(40), CanboxValue.ThrottlePct(30),
             CanboxValue.CoolantC(90), CanboxValue.FuelLevelPct(50), CanboxValue.BatteryVolts(14.0),
             CanboxValue.EngineRunning(true), CanboxValue.FuelLitres(40.0), CanboxValue.OutsideTempC(10.0),
             CanboxValue.Dimmer(40), CanboxValue.OilPressureKpa(200.0), CanboxValue.ManifoldHpa(1000.0),
             CanboxValue.EngineOffMinutes(3), CanboxValue.OdometerKm(100.0)
         )
         apply(
-            CanboxValue.SpeedKmh(null), CanboxValue.Rpm(null), CanboxValue.EngineLoadPct(null),
+            CanboxValue.SpeedKmh(null), CanboxValue.Rpm(null), CanboxValue.EngineLoadPct(null), CanboxValue.ThrottlePct(null),
             CanboxValue.CoolantC(null), CanboxValue.FuelLevelPct(null), CanboxValue.BatteryVolts(null),
             CanboxValue.EngineRunning(null), CanboxValue.FuelLitres(null), CanboxValue.OutsideTempC(null),
             CanboxValue.Dimmer(null), CanboxValue.OilPressureKpa(null), CanboxValue.ManifoldHpa(null),
             CanboxValue.EngineOffMinutes(null), CanboxValue.OdometerKm(null)
         )
         listOf(
-            K.VEHICLE_SPEED, K.RPM, K.ENGINE_LOAD, K.COOLANT_TEMP, K.FUEL_LEVEL, K.BATTERY_VOLTS,
+            K.VEHICLE_SPEED, K.RPM, K.ENGINE_LOAD, K.THROTTLE, K.COOLANT_TEMP, K.FUEL_LEVEL, K.BATTERY_VOLTS,
             K.ENGINE_RUNNING, K.FUEL_LITRES, K.OUTSIDE_TEMP, K.INSTRUMENT_DIMMER,
             K.OIL_PRESSURE, K.MANIFOLD_PRESSURE, K.ENGINE_OFF_MINUTES, K.ODOMETER
         ).forEach { assertNull(it.id, read(it)) }
@@ -372,28 +373,29 @@ class XyautoBusPublisherTest {
     @Test
     fun theFastFrameLandsOnItsKeys_andASentinelFrameWithdrawsThem() {
         val pipeline = box()
-        feedHex(pipeline, "AA 55 0A B3 02 76 0A 8D 37 04 B0 3C 04 80 76")
+        feedHex(pipeline, "AA 55 0B B3 02 76 0A 8D 1B 04 B0 3C 04 80 22 7D")
         assertEquals(63.0, read(K.VEHICLE_SPEED)!!, 0.0)
         assertEquals(2701.0, read(K.RPM)!!, 0.0)
-        assertEquals(55.0, read(K.ENGINE_LOAD)!!, 0.0)
+        assertEquals(27.0, read(K.ENGINE_LOAD)!!, 0.0)
+        assertEquals(34.0, read(K.THROTTLE)!!, 0.0)
         assertEquals(12.0, read(K.FUEL_FLOW)!!, 0.0)
         assertEquals(240.0, read(K.OIL_PRESSURE)!!, 0.0)
         assertEquals(1152.0, read(K.MANIFOLD_PRESSURE)!!, 0.0)
         assertEquals(19.0, read(K.FUEL_CONSUMPTION)!!, 0.1)                 // 12 / 63 * 100
-        feedHex(pipeline, "AA 55 0A B3 FF FF FF FF FF FF FF FF FF FF B2")
-        listOf(K.VEHICLE_SPEED, K.RPM, K.ENGINE_LOAD, K.FUEL_FLOW, K.OIL_PRESSURE, K.MANIFOLD_PRESSURE, K.FUEL_CONSUMPTION)
+        feedHex(pipeline, "AA 55 0B B3 FF FF FF FF FF FF FF FF FF FF FF B2")
+        listOf(K.VEHICLE_SPEED, K.RPM, K.ENGINE_LOAD, K.THROTTLE, K.FUEL_FLOW, K.OIL_PRESSURE, K.MANIFOLD_PRESSURE, K.FUEL_CONSUMPTION)
             .forEach { assertNull(it.id, read(it)) }
     }
 
     @Test
     fun theSlowFramesLandOnTheirKeys() {
         val pipeline = box()
-        feedHex(pipeline, "AA 55 05 B4 85 8F 5C 02 C6 F0")
+        feedHex(pipeline, "AA 55 05 B4 85 8F 5B 02 C6 EF")
         assertEquals(93.0, read(K.COOLANT_TEMP)!!, 0.0)
         assertEquals(14.3, read(K.BATTERY_VOLTS)!!, 0.0)
-        assertEquals(92.0, read(K.FUEL_LEVEL)!!, 0.0)
+        assertEquals(91.0, read(K.FUEL_LEVEL)!!, 0.0)
         assertEquals(71.0, read(K.FUEL_LITRES)!!, 0.0)
-        feedHex(pipeline, "AA 55 05 B4 FF 8F 5C 02 C6 6A")                // 02C stale: coolant alone goes
+        feedHex(pipeline, "AA 55 05 B4 FF 8F 5B 02 C6 69")                // 02C stale: coolant alone goes
         assertNull(read(K.COOLANT_TEMP))
         assertEquals(14.3, read(K.BATTERY_VOLTS)!!, 0.0)
         feedHex(pipeline, "AA 55 03 B5 00 FA 0A BB")

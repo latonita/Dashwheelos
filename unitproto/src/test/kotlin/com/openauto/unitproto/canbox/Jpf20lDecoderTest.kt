@@ -35,14 +35,14 @@ class Jpf20lDecoderTest {
             "AA 55 02 E0 00 00 E1",
             "AA 55 04 B0 02 01 BD 2A 9D",
             "AA 55 04 B0 02 01 BD 00 73",
-            "AA 55 0A B3 02 76 0A 8D 37 04 B0 3C 04 80 76",
-            "AA 55 0A B3 00 00 02 44 0A 00 64 28 03 F0 8B",
-            "AA 55 0A B3 FF FF FF FF FF FF FF FF FF FF B2",
+            "AA 55 0B B3 02 76 0A 8D 1B 04 B0 3C 04 80 22 7D",
+            "AA 55 0B B3 00 00 02 44 0B 00 64 28 03 F0 00 8D",
+            "AA 55 0B B3 FF FF FF FF FF FF FF FF FF FF FF B2",
             "AA 55 07 B2 2B 04 19 10 01 03 FF 13",
             "AA 55 07 B2 23 04 19 10 01 03 FD 09",
             "AA 55 07 B2 A1 00 00 00 00 FF A1 F9",
-            "AA 55 05 B4 85 8F 5C 02 C6 F0",
-            "AA 55 05 B4 FF 8F 5C 02 C6 6A",
+            "AA 55 05 B4 85 8F 5B 02 C6 EF",
+            "AA 55 05 B4 FF 8F 5B 02 C6 69",
             "AA 55 03 B5 00 FA 0A BB",
             "AA 55 03 B5 FF B5 FF 6A",
             "AA 55 06 B8 12 D6 87 06 01 0A 3D",
@@ -63,10 +63,11 @@ class Jpf20lDecoderTest {
 
     @Test
     fun fast_63kmh_2701rpm() {
-        val v = decode("AA 55 0A B3 02 76 0A 8D 37 04 B0 3C 04 80 76")
+        val v = decode("AA 55 0B B3 02 76 0A 8D 1B 04 B0 3C 04 80 22 7D")
         assertEquals(CanboxValue.SpeedKmh(63), v.one<CanboxValue.SpeedKmh>())
         assertEquals(CanboxValue.Rpm(2701), v.one<CanboxValue.Rpm>())
-        assertEquals(CanboxValue.EngineLoadPct(55), v.one<CanboxValue.EngineLoadPct>())
+        assertEquals(CanboxValue.EngineLoadPct(27), v.one<CanboxValue.EngineLoadPct>())
+        assertEquals(CanboxValue.ThrottlePct(34), v.one<CanboxValue.ThrottlePct>())
         assertEquals(12.0, v.one<CanboxValue.FuelFlowLph>().lph!!, 1e-9)
         assertEquals(240.0, v.one<CanboxValue.OilPressureKpa>().kpa!!, 1e-9)
         assertEquals(1152.0, v.one<CanboxValue.ManifoldHpa>().hpa!!, 1e-9)
@@ -74,21 +75,22 @@ class Jpf20lDecoderTest {
 
     @Test
     fun fast_idle_zeroIsARealReading() {
-        val v = decode("AA 55 0A B3 00 00 02 44 0A 00 64 28 03 F0 8B")
+        val v = decode("AA 55 0B B3 00 00 02 44 0B 00 64 28 03 F0 00 8D")
         assertEquals(CanboxValue.SpeedKmh(0), v.one<CanboxValue.SpeedKmh>())
         assertEquals(CanboxValue.Rpm(580), v.one<CanboxValue.Rpm>())
-        assertEquals(CanboxValue.EngineLoadPct(10), v.one<CanboxValue.EngineLoadPct>())
+        assertEquals(CanboxValue.EngineLoadPct(11), v.one<CanboxValue.EngineLoadPct>())
+        assertEquals(CanboxValue.ThrottlePct(0), v.one<CanboxValue.ThrottlePct>())
         assertEquals(1.0, v.one<CanboxValue.FuelFlowLph>().lph!!, 1e-9)
         assertEquals(160.0, v.one<CanboxValue.OilPressureKpa>().kpa!!, 1e-9)
         assertEquals(1008.0, v.one<CanboxValue.ManifoldHpa>().hpa!!, 1e-9)
     }
 
     @Test
-    fun fast_everyFieldUnavailable_isSixWithdrawals() {
-        val v = decode("AA 55 0A B3 FF FF FF FF FF FF FF FF FF FF B2")
+    fun fast_everyFieldUnavailable_isSevenWithdrawals() {
+        val v = decode("AA 55 0B B3 FF FF FF FF FF FF FF FF FF FF FF B2")
         assertEquals(
             listOf<CanboxValue>(
-                CanboxValue.SpeedKmh(null), CanboxValue.Rpm(null), CanboxValue.EngineLoadPct(null),
+                CanboxValue.SpeedKmh(null), CanboxValue.Rpm(null), CanboxValue.EngineLoadPct(null), CanboxValue.ThrottlePct(null),
                 CanboxValue.FuelFlowLph(null), CanboxValue.OilPressureKpa(null), CanboxValue.ManifoldHpa(null)
             ),
             v
@@ -97,7 +99,7 @@ class Jpf20lDecoderTest {
 
     @Test
     fun fast_zeroLoadFlowAndOilAreReadings_notBlanks() {
-        val v = decoder.decode(CanFrame(Jpf20lCmd.FAST, bytes(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
+        val v = decoder.decode(CanFrame(Jpf20lCmd.FAST, bytes(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
         assertEquals(0, v.one<CanboxValue.EngineLoadPct>().pct)
         assertEquals(0.0, v.one<CanboxValue.FuelFlowLph>().lph!!, 0.0)
         assertEquals(0.0, v.one<CanboxValue.OilPressureKpa>().kpa!!, 0.0)
@@ -110,11 +112,13 @@ class Jpf20lDecoderTest {
         assertEquals(63, kmh(630)); assertEquals(63, kmh(625)); assertEquals(62, kmh(624)); assertEquals(0, kmh(4))
         assertNull(kmh(0xFFFF))
         assertNull(kmh(4001))
+        assertEquals(34, Jpf20lSignals.throttlePct(bytes(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 34)))
+        assertNull(Jpf20lSignals.throttlePct(bytes(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF)))
     }
 
     @Test
     fun fast_saturatedBoostIsKept_flowAboveTheBoundIsDropped() {
-        assertEquals(2032.0, Jpf20lSignals.manifoldHpa(bytes(0, 0, 0, 0, 0, 0, 0, 0, 0x07, 0xF0))!!, 0.0)
+        assertEquals(2032.0, Jpf20lSignals.manifoldHpa(bytes(0, 0, 0, 0, 0, 0, 0, 0, 0x07, 0xF0, 0))!!, 0.0)
         assertEquals(512.0, Jpf20lSignals.fuelFlowLph(bytes(0, 0, 0, 0, 0, 0xC8, 0x00))!!, 0.0)
         assertNull(Jpf20lSignals.fuelFlowLph(bytes(0, 0, 0, 0, 0, 0xC8, 0x01)))
     }
@@ -311,17 +315,17 @@ class Jpf20lDecoderTest {
 
     @Test
     fun engine_vectors() {
-        val v = decode("AA 55 05 B4 85 8F 5C 02 C6 F0")
+        val v = decode("AA 55 05 B4 85 8F 5B 02 C6 EF")
         assertEquals(CanboxValue.CoolantC(93), v.one<CanboxValue.CoolantC>())
         assertEquals(14.3, v.one<CanboxValue.BatteryVolts>().volts!!, 1e-9)
-        assertEquals(CanboxValue.FuelLevelPct(92), v.one<CanboxValue.FuelLevelPct>())
+        assertEquals(CanboxValue.FuelLevelPct(91), v.one<CanboxValue.FuelLevelPct>())
         assertEquals(71.0, v.one<CanboxValue.FuelLitres>().litres!!, 1e-9)
 
         // 02C stale: coolant alone is withdrawn, the rest stays.
-        val d = decode("AA 55 05 B4 FF 8F 5C 02 C6 6A")
+        val d = decode("AA 55 05 B4 FF 8F 5B 02 C6 69")
         assertNull(d.one<CanboxValue.CoolantC>().celsius)
         assertEquals(14.3, d.one<CanboxValue.BatteryVolts>().volts!!, 1e-9)
-        assertEquals(92, d.one<CanboxValue.FuelLevelPct>().pct)
+        assertEquals(91, d.one<CanboxValue.FuelLevelPct>().pct)
         assertEquals(71.0, d.one<CanboxValue.FuelLitres>().litres!!, 1e-9)
     }
 

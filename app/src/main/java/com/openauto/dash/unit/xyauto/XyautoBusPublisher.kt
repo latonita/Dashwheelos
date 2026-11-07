@@ -67,6 +67,7 @@ internal class XyautoBusPublisher(
             }
             is CanboxValue.Rpm -> unitBusRpm(out, v.rpm)
             is CanboxValue.EngineLoadPct -> out.put(K.ENGINE_LOAD, v.pct?.toDouble(), ttlMs = FAST_HOLD_MS)
+            is CanboxValue.ThrottlePct -> out.put(K.THROTTLE, v.pct?.toDouble(), ttlMs = FAST_HOLD_MS)
             is CanboxValue.OilPressureKpa -> out.put(K.OIL_PRESSURE, v.kpa, ttlMs = FAST_HOLD_MS)
             is CanboxValue.ManifoldHpa -> out.put(K.MANIFOLD_PRESSURE, v.hpa, ttlMs = FAST_HOLD_MS)
             is CanboxValue.EngineOffMinutes -> out.put(K.ENGINE_OFF_MINUTES, v.minutes?.toDouble(), ttlMs = SLOW_HOLD_MS)
