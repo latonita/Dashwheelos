@@ -95,12 +95,12 @@ private class XyautoBus(private val app: Context) : VehicleBusSource {
     override val listening: StateFlow<Boolean> = _listening
 
     /**
-     * The H1N4JPF20L box sends its heartbeat (0xB0) once a second and repeats every other frame within about 10 s
-     * even when nothing changes, all of it only while the ignition is on (its whole block is gated on ACC). Five
-     * seconds without a frame is therefore a box that is off, not a quiet one: the source goes down and what it
-     * said is withdrawn.
+     * The H1N4JPF20L box (telemetry v2) sends its FAST frame (0xB3) every 100 ms whatever the car does, even when
+     * every field is a sentinel, and only while the ignition is on (its whole block is gated on ACC). A second and
+     * a half without any frame is therefore a box that is off or gone (the spec's 0.5 s, with room for a late
+     * broadcast): the source goes down and what it said is withdrawn.
      */
-    override val silenceMs: Long = 5_000L
+    override val silenceMs: Long = 1_500L
 
     @Volatile private var publisher: XyautoBusPublisher? = null
     @Volatile private var raw: ((String, String) -> Unit)? = null
@@ -122,7 +122,7 @@ private class XyautoBus(private val app: Context) : VehicleBusSource {
     private val pipeline = CanboxPipeline()
 
     override fun start(context: Context, publisher: Publisher, raw: (key: String, value: String) -> Unit) {
-        this.publisher = XyautoBusPublisher(publisher)
+        this.publisher = XyautoBusPublisher(publisher, log = { Log.i(TAG, it) })
         this.raw = raw
         if (!registered) {
             val filter = IntentFilter().apply { XyautoProtocol.BROADCASTS.forEach(::addAction) }

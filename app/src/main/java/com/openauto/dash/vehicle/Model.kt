@@ -42,6 +42,18 @@ sealed interface Gear {
     data class Forward(val n: Int) : Gear
 }
 
+/** The key position the car reports. */
+enum class IgnitionState { NO_KEY, KEY_OFF, ACC, ON, CRANK }
+
+/** Cruise control: [ARMED] = switched on, [ENGAGED] = a speed is set. */
+enum class Cruise { OFF, ARMED, ENGAGED }
+
+/** The 4WD range; [SHIFTING] is the transfer case moving between the two. */
+enum class TransferCase { HIGH, LOW, SHIFTING }
+
+/** The warning lamps of the instrument cluster the car reports. */
+enum class Telltale { ESP_OFF, MIL, OIL, CHARGE, ABS, ESP, GLOW, WATER_IN_FUEL }
+
 sealed interface VehicleEvent {
     /** The resolved value of a [Key.State] changed; [value] and [source] are null when it went away. */
     data class Changed(val key: Key<*>, val value: Any?, val source: Source?) : VehicleEvent
