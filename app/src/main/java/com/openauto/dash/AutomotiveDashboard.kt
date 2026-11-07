@@ -1743,7 +1743,7 @@ fun AutomotiveDashboard(inSplitMode: Boolean = false) {
                         } ?: tile.describe(),
                         page = page,
                         side = side,
-                        designs = widget?.takeIf { it.kind != BuiltinKind.DASH_BAR }?.let {
+                        designs = widget?.takeIf { it.kind != BuiltinKind.DASH_BAR && it.kind != BuiltinKind.INDICATORS }?.let {
                             { shelfModifier ->
                                 DesignShelf(
                                     kind = widget.kind,

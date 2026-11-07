@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="indicators_kind">Indicators</string>
+    <string name="indicators_kind_blurb">The car\'s tell-tales: turn signals, beams, fog lights, hazards</string>
+    <string name="indicators_title">Indicators</string>
+    <string name="tell_left">Left turn signal</string>
+    <string name="tell_right">Right turn signal</string>
+    <string name="tell_hazard">Hazard lights</string>
+    <string name="tell_parking">Parking lights</string>
+    <string name="tell_low_beam">Low beam</string>
+    <string name="tell_high_beam">High beam</string>
+    <string name="tell_front_fog">Front fog lights</string>
+    <string name="tell_rear_fog">Rear fog light</string>
+    <string name="tell_handbrake">Parking brake</string>
+    <string name="tell_seat_belt">Seat belt</string>
+</resources>
