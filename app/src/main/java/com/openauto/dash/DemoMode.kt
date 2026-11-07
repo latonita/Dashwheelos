@@ -467,7 +467,8 @@ object DemoMode {
             busPublisher.put(K.DOORS, McuReader.DoorState())
             busPublisher.put(K.FUEL_LEVEL, 58.0)
             busPublisher.put(K.RANGE, rangeKm.toDouble())
-            busPublisher.put(K.HANDBRAKE, false)
+            // On in the first phase of the 24 s cycle (the Indicators tile's parking brake).
+            busPublisher.put(K.HANDBRAKE, (t / 6).toInt().mod(4) == 0)
             busPublisher.put(K.DRIVER_BELT, false)
             busPublisher.put(K.ODOMETER, DEMO_ODOMETER_KM + tripM / 1000)
             // A Peugeot or Citroën's own trip computer, with a brake bulb out: Car problems shows it on the car.

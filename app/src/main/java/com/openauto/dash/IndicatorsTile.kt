@@ -217,24 +217,31 @@ private fun DrawScope.drawTell(tell: Tell, colour: Color) {
             }
         }
         Tell.PARKING -> {
-            // (P): the letter between two brackets.
-            drawArc(colour, 135f, 90f, false, p(0.06f, 0.15f), Size(s * 0.4f, s * 0.7f), style = line)
-            drawArc(colour, -45f, 90f, false, p(0.54f, 0.15f), Size(s * 0.4f, s * 0.7f), style = line)
-            val letter = Path().apply {
-                start(p(0.4f, 0.72f))
-                to(p(0.4f, 0.28f))
-                to(p(0.54f, 0.28f))
-                cubicTo(0.7f * s, 0.28f * s, 0.7f * s, 0.54f * s, 0.54f * s, 0.54f * s)
-                to(p(0.4f, 0.54f))
+            // The sidelights: two small half-lamps back to back, each with short rays to the outside.
+            for (side in floatArrayOf(-1f, 1f)) {
+                fun x(v: Float) = 0.5f + side * v
+                val body = Path().apply {
+                    start(p(x(0.2f), 0.28f))
+                    cubicTo(x(-0.02f) * s, 0.28f * s, x(-0.02f) * s, 0.72f * s, x(0.2f) * s, 0.72f * s)
+                    close()
+                }
+                drawPath(body, colour)
+                for (y in floatArrayOf(0.34f, 0.5f, 0.66f)) ray(x(0.27f), y, x(0.44f), y)
             }
-            drawPath(letter, colour, style = line)
         }
         Tell.HANDBRAKE -> {
-            // (!): an exclamation mark between two brackets.
-            drawArc(colour, 135f, 90f, false, p(0.06f, 0.15f), Size(s * 0.4f, s * 0.7f), style = line)
-            drawArc(colour, -45f, 90f, false, p(0.54f, 0.15f), Size(s * 0.4f, s * 0.7f), style = line)
-            ray(0.5f, 0.28f, 0.5f, 0.55f)
-            drawCircle(colour, radius = w * 0.75f, center = p(0.5f, 0.7f))
+            // The parking brake: a ring with a P inside it, between brackets.
+            drawArc(colour, 135f, 90f, false, p(0.02f, 0.15f), Size(s * 0.4f, s * 0.7f), style = line)
+            drawArc(colour, -45f, 90f, false, p(0.58f, 0.15f), Size(s * 0.4f, s * 0.7f), style = line)
+            drawCircle(colour, radius = s * 0.24f, center = p(0.5f, 0.5f), style = line)
+            val letter = Path().apply {
+                start(p(0.44f, 0.64f))
+                to(p(0.44f, 0.36f))
+                to(p(0.52f, 0.36f))
+                cubicTo(0.62f * s, 0.36f * s, 0.62f * s, 0.52f * s, 0.52f * s, 0.52f * s)
+                to(p(0.44f, 0.52f))
+            }
+            drawPath(letter, colour, style = line)
         }
         Tell.SEAT_BELT -> {
             // A seated figure with the belt across it.

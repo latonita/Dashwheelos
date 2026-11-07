@@ -86,6 +86,9 @@ class IndicatorsTest {
         assertEquals(TellColour.BLUE, Tell.HIGH_BEAM.colour)
         assertEquals(TellColour.GREEN, Tell.FRONT_FOG.colour)
         assertEquals(TellColour.AMBER, Tell.REAR_FOG.colour)
+        // The parking brake is red (the (P) lamp); the parking lights are green.
+        assertEquals(TellColour.RED, Tell.HANDBRAKE.colour)
+        assertEquals(TellColour.GREEN, Tell.PARKING.colour)
     }
 
     @Test
