@@ -58,15 +58,15 @@ class CanboxRegistryTest {
         val p = CanboxPipeline()
         assertEquals("hiworld-jpf2", p.decoder.id)
         // A custom frame is not understood by the stock decoder...
-        assertTrue(p.feed(wire(Jpf20lCmd.DRIVETRAIN, 0x00, 0x39, 0x09, 0x92, 0x2D, 0x11))!!.values.isEmpty())
+        assertTrue(p.feed(wire(Jpf20lCmd.FAST, 0x02, 0x3A, 0x09, 0x92, 0x2D, 0x00, 0x64, 0x28, 0x03, 0xF0, 0x00))!!.values.isEmpty())
 
         // ...until the version says it is a JPF20L; the version frame itself still comes out.
         val v = p.feed(version("H1N4JPF20L-211026"))!!
         assertEquals(listOf<CanboxValue>(CanboxValue.Version("H1N4JPF20L-211026")), v.values)
         assertEquals("H1N4JPF20L-211026", p.version)
         assertEquals("hiworld-jpf20l", p.decoder.id)
-        val d = p.feed(wire(Jpf20lCmd.DRIVETRAIN, 0x00, 0x39, 0x09, 0x92, 0x2D, 0x11))!!
-        assertEquals("drivetrain", d.name)
+        val d = p.feed(wire(Jpf20lCmd.FAST, 0x02, 0x3A, 0x09, 0x92, 0x2D, 0x00, 0x64, 0x28, 0x03, 0xF0, 0x00))!!
+        assertEquals("fast", d.name)
         assertEquals(CanboxValue.SpeedKmh(57), d.values.first())
     }
 

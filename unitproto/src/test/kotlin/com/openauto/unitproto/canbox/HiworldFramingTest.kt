@@ -47,7 +47,7 @@ class HiworldFramingTest {
         // sum = AA+55+03+B3+01+02+03 = 0xBB -- the header counts.
         val frame = HiworldFraming.parse(bytes(0xAA, 0x55, 0x03, 0xB3, 0x01, 0x02, 0x03, 0xBB))
         assertNotNull(frame)
-        assertEquals(Jpf20lCmd.DRIVETRAIN, frame!!.cmd)
+        assertEquals(Jpf20lCmd.FAST, frame!!.cmd)
         assertArrayEquals(bytes(0x01, 0x02, 0x03), frame.payload)
     }
 
